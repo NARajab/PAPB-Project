@@ -32,11 +32,9 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  StreamSubscription? _sub;
 
   @override
   void dispose() {
-    _sub?.cancel();
     super.dispose();
   }
 

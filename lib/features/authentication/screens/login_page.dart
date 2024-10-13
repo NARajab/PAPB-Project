@@ -13,41 +13,17 @@ class LoginScreen extends StatefulWidget {
   _LoginScreenState createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _passwordVisible = false;
   final AuthService _authService = AuthService();
 
-  bool _isSplashVisible = true;
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
   @override
   void initState() {
     super.initState();
     _loadRememberedEmail();
-    _controller = AnimationController(
-      duration: const Duration(seconds: 2),
-      vsync: this,
-    );
-
-    _animation = Tween(begin: 1.0, end: 0.0).animate(_controller)
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            _isSplashVisible = false;
-          });
-        }
-      });
-
-    _startSplashScreen();
-  }
-
-  Future<void> _startSplashScreen() async {
-    await Future.delayed(const Duration(seconds: 2));
-    _controller.forward();
   }
 
   Future<void> _loadRememberedEmail() async {
@@ -136,23 +112,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _isSplashVisible
-          ? FadeTransition(
-        opacity: _animation,
-        child: _buildSplashScreen(),
-      )
-          : _buildLoginForm(),
+      body: _buildLoginForm(),
     );
-  }
-
-  Widget _buildSplashScreen() {
-    return
-      Center(
-        child: Image.asset(
-          'assets/images/logo-bima.png',
-          height: 250.0,
-        ),
-      );
   }
 
   Widget _buildLoginForm() {

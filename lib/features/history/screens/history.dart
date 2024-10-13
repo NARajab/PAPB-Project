@@ -171,7 +171,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ),
           body: isLoading
-              ? const Center(child: CircularProgressIndicator())
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF304FFE)))
               : Container(
             color: Colors.white,
             child: TabBarView(

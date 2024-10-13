@@ -51,7 +51,7 @@ class _KkhScreenState extends State<KkhScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return const Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(color: Color(0xFF304FFE)),
         );
       },
     );

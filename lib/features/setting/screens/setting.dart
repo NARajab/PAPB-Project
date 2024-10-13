@@ -17,6 +17,7 @@ class _SettingScreenState extends State<SettingScreen> {
   String email = 'Loading...';
   String profileImageUrl = 'Loading...';
   File? profileImageFile;
+  bool isLoading = true;
 
   @override
   void initState() {
@@ -37,10 +38,18 @@ class _SettingScreenState extends State<SettingScreen> {
           username = userData['user']['Auth']['username'] ?? 'No Name';
           email = userData['user']['Auth']['email'] ?? 'No Email';
           profileImageUrl = userData['user']['imageUrl'] ?? 'No Image';
+          isLoading = false;
         });
       } catch (e) {
         print('Error loading profile: $e');
+        setState(() {
+          isLoading = false;
+        });
       }
+    } else {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
 
@@ -48,7 +57,9 @@ class _SettingScreenState extends State<SettingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: ListView(
+      body: isLoading // Check if loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF304FFE)))
+          : ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildProfileHeader(),
@@ -103,7 +114,7 @@ class _SettingScreenState extends State<SettingScreen> {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8.0),
         decoration: BoxDecoration(
-          color: Colors.white, // Set background color of the option card to white
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12.0),
           boxShadow: const [
             BoxShadow(
@@ -148,7 +159,7 @@ class _SettingScreenState extends State<SettingScreen> {
               _logout(context);
             },
             child: const Text(
-              "Logout",
+              "Yes",
               style: TextStyle(color: Colors.red),
             ),
           ),
@@ -157,7 +168,7 @@ class _SettingScreenState extends State<SettingScreen> {
               Navigator.of(context).pop();
             },
             child: const Text(
-              "Cancel",
+              "No",
               style: TextStyle(color: Colors.white),
             ),
           ),
@@ -168,14 +179,13 @@ class _SettingScreenState extends State<SettingScreen> {
       borderRadius: BorderRadius.circular(8),
       backgroundColor: Colors.black54,
       icon: const Icon(
-        Icons.warning,
+        Icons.logout,
         size: 28.0,
         color: Colors.red,
       ),
       leftBarIndicatorColor: Colors.red,
     );
 
-    // Show the Flushbar within a Stack to center it
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -194,7 +204,6 @@ class _SettingScreenState extends State<SettingScreen> {
       },
     );
   }
-
 
   void _logout(BuildContext context) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();

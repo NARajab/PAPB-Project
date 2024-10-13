@@ -22,7 +22,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
   late ForemanServices _data;
 
   @override
-  void initState(){
+  void initState() {
     super.initState();
     _data = ForemanServices();
     _loadData();
@@ -30,11 +30,11 @@ class _ForemanP2hState extends State<ForemanP2h> {
   }
 
   Future<void> _loadData() async {
-    try{
+    try {
       final response = await _data.getAllP2hUsers();
       if (response['status'] == 'success' && response['p2h'] != null) {
         setState(() {
-          data = List<Map<String, dynamic>>.from(response['p2h']);
+          data = List<Map<String, dynamic>>.from(response['p2h'] ?? []);
           isLoading = false; // Set isLoading menjadi false setelah data dimuat
         });
       } else {
@@ -43,7 +43,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
           isLoading = false; // Set isLoading menjadi false jika data tidak tersedia
         });
       }
-    } catch (e){
+    } catch (e) {
       print('Error occurred while loading P2h history data: $e');
       setState(() {
         isLoading = false; // Set isLoading menjadi false jika terjadi error
@@ -65,8 +65,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, dynamic>> filteredData = data
-        .where((item) {
+    List<Map<String, dynamic>> filteredData = data.where((item) {
       final p2h = item['P2h'] ?? {};
 
       final date = p2h['date']?.toLowerCase() ?? '';
@@ -76,23 +75,22 @@ class _ForemanP2hState extends State<ForemanP2h> {
       return date.contains(filterText) ||
           vehicleType.contains(filterText) ||
           jobsite.contains(filterText);
-    })
-        .toList();
+    }).toList();
 
     filteredData.sort((a, b) {
-      final p2hA = a['P2h'];
-      final p2hB = b['P2h'];
+      final p2hA = a['P2h'] ?? {};
+      final p2hB = b['P2h'] ?? {};
 
-      DateTime? dateA = DateTime.tryParse(a['P2h']['createdAt']);
-      DateTime? dateB = DateTime.tryParse(b['P2h']['createdAt']);
+      DateTime? dateA = DateTime.tryParse(p2hA['createdAt'] ?? '');
+      DateTime? dateB = DateTime.tryParse(p2hB['createdAt'] ?? '');
 
       int dateComparison = (dateB ?? DateTime.now()).compareTo(dateA ?? DateTime.now());
       if (dateComparison != 0) {
         return dateComparison;
       }
 
-      bool isValidatedA = a['fValidation'] as bool;
-      bool isValidatedB = b['fValidation'] as bool;
+      bool isValidatedA = a['fValidation'] as bool? ?? false;
+      bool isValidatedB = b['fValidation'] as bool? ?? false;
       return isValidatedA ? 1 : -1; // false (not validated) should come first
     });
 
@@ -160,36 +158,33 @@ class _ForemanP2hState extends State<ForemanP2h> {
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF304FFE)))
+          : filteredData.isEmpty
+          ? const Center(
+        child: Text(
+          'Tidak ada P2H',
+          style: TextStyle(fontSize: 18, color: Colors.grey),
+        ),
+      )
           : ListView(
         padding: const EdgeInsets.all(16.0),
-        children: filteredData
-            .map((item) {
-          final p2h = item['P2h'];
+        children: filteredData.map((item) {
+          final p2h = item['P2h'] ?? {};
           final int p2hUserId = item['id'] as int? ?? 0;
           final int p2hId = item['p2hId'] as int? ?? 0; // Default to 0 or handle it as needed
-          final String title = p2h['date'] ?? 'No Title';
-          final String subtitle = item['User']['name'] ?? 'No Subtitle';
-          final String idVehicle = p2h['Vehicle']['type'].toString() ?? 'Unknown Vehicle';
-          final String vehicle = p2h['Vehicle']['type'] ?? 'Unknown Vehicle';
-          final String date = p2h['date'] ?? 'No Date';
+          final String title = p2h['date'] ?? '';
+          final String subtitle = item['User']?['name'] ?? '';
+          final String idVehicle = p2h['Vehicle']?['type']?.toString() ?? '';
+          final String vehicle = p2h['Vehicle']?['type'] ?? '';
+          final String date = p2h['date'] ?? '';
           final bool isValidated = item['fValidation'] as bool? ?? false;
 
           return _buildCard(
-              context, p2hUserId, p2hId,
-              title,
-              subtitle,
-              idVehicle,
-              date,
-              role,
-              isValidated,
-              vehicle
-          );
+              context, p2hUserId, p2hId, title, subtitle, idVehicle, date, role, isValidated, vehicle);
         }).toList(),
       ),
     );
   }
-
 
   Widget _buildCard(BuildContext context, int p2hUserId, int p2hId, String title, String subtitle, String idVehicle, String date, String role, bool isValidated, String vehicle) {
     return GestureDetector(
@@ -202,7 +197,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title ?? 'No Title'),
+              Text(title),
               Container(
                 width: 10,
                 height: 10,
@@ -221,7 +216,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
               ),
             ],
           ),
-          subtitle: Text('$vehicle - $subtitle' ?? 'No Subtitle'),
+          subtitle: Text('$vehicle - $subtitle'),
         ),
       ),
     );

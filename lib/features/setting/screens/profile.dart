@@ -17,6 +17,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String phoneNumber = 'Loading...';
   String profileImageUrl = 'Loading...';
   File? profileImageFile;
+  bool _isLoading = true; // Track loading state
 
   @override
   void initState() {
@@ -38,11 +39,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           email = userData['user']['Auth']['email'] ?? 'No Email';
           phoneNumber = userData['user']['phoneNumber'] ?? 'No Phone Number';
           profileImageUrl = userData['user']['imageUrl'] ?? 'No Image';
+          _isLoading = false; // Set loading to false after data is loaded
         });
       } catch (e) {
-        // Handle the error appropriately, maybe show an error message
         print('Error loading profile: $e');
+        setState(() {
+          _isLoading = false; // Set loading to false in case of error
+        });
       }
+    } else {
+      setState(() {
+        _isLoading = false; // Set loading to false if token is null
+      });
     }
   }
 
@@ -106,7 +114,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   });
                 }
               });
-
             },
           ),
         ],
@@ -115,44 +122,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            mainAxisSize: MainAxisSize.min, // Ensure the column sizes to its content
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                radius: 100,
-                backgroundImage: profileImageFile != null
-                    ? FileImage(profileImageFile!)
-                    : NetworkImage(profileImageUrl) as ImageProvider,
-                backgroundColor: Colors.grey[200],
-                child: profileImageFile == null && profileImageUrl.isEmpty
-                    ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                    : null,
-              ),
-              const SizedBox(height: 20),
-              Text(
-                username,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF304FFE),
+              if (_isLoading)
+                const CircularProgressIndicator(color: Color(0xFF304FFE)),
+              if (!_isLoading) ...[
+                CircleAvatar(
+                  radius: 100,
+                  backgroundImage: profileImageFile != null
+                      ? FileImage(profileImageFile!)
+                      : NetworkImage(profileImageUrl) as ImageProvider,
+                  backgroundColor: Colors.grey[200],
+                  child: profileImageFile == null && profileImageUrl.isEmpty
+                      ? const Icon(Icons.person, size: 60, color: Colors.grey)
+                      : null,
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                email,
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[700],
+                const SizedBox(height: 20),
+                Text(
+                  username,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF304FFE),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                phoneNumber,
-                style: TextStyle(
-                  fontSize: 18,
-                  color: Colors.grey[700],
+                const SizedBox(height: 10),
+                Text(
+                  email,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[700],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 10),
+                Text(
+                  phoneNumber,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

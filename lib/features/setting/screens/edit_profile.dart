@@ -221,9 +221,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
           ),
           if (isLoading)
-            const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF304FFE),
+            Container(
+              color: Colors.black.withOpacity(0.5), // Semi-transparent overlay
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF304FFE),
+                ),
               ),
             ),
         ],

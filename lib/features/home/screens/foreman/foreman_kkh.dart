@@ -145,7 +145,14 @@ class _ForemanKkhState extends State<ForemanKkh> {
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF304FFE)))
+          : data.isEmpty // Check if there's no data
+          ? const Center(
+        child: Text(
+          'Tidak ada KKH',
+          style: TextStyle(fontSize: 18, color: Colors.grey),
+        ),
+      )
           : ListView(
         padding: const EdgeInsets.all(16.0),
         children: data

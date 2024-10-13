@@ -267,30 +267,39 @@ class _HomePageContentState extends State<HomePageContent> {
                   future: _p2hCountFuture,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return _buildCounter('Total Submission P2H Saat Ini', 'Loading...');
+                      return _buildCounterP2h(
+                        'Total Submission P2H Saat Ini',
+                        '',
+                        isLoading: true, // Pass loading state
+                      );
                     } else if (snapshot.hasError) {
-                      return _buildCounter('Total Submission P2H Saat Ini', 'Error');
+                      return _buildCounterP2h('Total Submission P2H Saat Ini', 'Error');
                     } else if (snapshot.hasData) {
-                      return _buildCounter('Total Submission P2H Saat Ini', '${snapshot.data} KALI');
+                      return _buildCounterP2h('Total Submission P2H Saat Ini', '${snapshot.data} KALI');
                     } else {
-                      return _buildCounter('Total Submission P2H Saat Ini', '0 KALI');
+                      return _buildCounterP2h('Total Submission P2H Saat Ini', '0 KALI');
                     }
                   },
                 ),
-                FutureBuilder(
-                    future: _kkhCountFuture,
-                    builder: (context, snapshot){
-                      if(snapshot.connectionState == ConnectionState.waiting){
-                        return _buildCounter('Total Submission KKH Saat Ini', 'Loading...');
-                      } else if (snapshot.hasError) {
-                        return _buildCounter('Total Submission KKH Saat Ini', 'Error');
-                      } else if (snapshot.hasData) {
-                        return _buildCounter('Total Submission KKH Saat Ini', '${snapshot.data} KALI');
-                      } else {
-                        return _buildCounter('Total Submission KKH Saat Ini', '0 KALI');
-                      }
+                FutureBuilder<int>(
+                  future: _kkhCountFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return _buildCounterP2h(
+                        'Total Submission KKH Saat Ini',
+                        '',
+                        isLoading: true, // Pass loading state
+                      );
+                    } else if (snapshot.hasError) {
+                      return _buildCounterP2h('Total Submission KKH Saat Ini', 'Error');
+                    } else if (snapshot.hasData) {
+                      return _buildCounterP2h('Total Submission KKH Saat Ini', '${snapshot.data} KALI');
+                    } else {
+                      return _buildCounterP2h('Total Submission KKH Saat Ini', '0 KALI');
                     }
+                  },
                 ),
+
               ],
             ),
           ),
@@ -300,8 +309,7 @@ class _HomePageContentState extends State<HomePageContent> {
     );
   }
 
-  Widget _buildCounter(String title, String count) {
-
+  Widget _buildCounterP2h(String title, String count, {bool isLoading = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -312,7 +320,16 @@ class _HomePageContentState extends State<HomePageContent> {
             color: Colors.black54,
           ),
         ),
-        Text(
+        isLoading
+            ? const SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.0,
+            color: Color(0xFF304FFE),
+          ),
+        )
+            : Text(
           count,
           style: const TextStyle(
             fontSize: 18,
@@ -322,6 +339,7 @@ class _HomePageContentState extends State<HomePageContent> {
       ],
     );
   }
+
 
   Widget _buildWidgetOptions(BuildContext context) {
     return Padding(
@@ -406,7 +424,7 @@ class _HomePageContentState extends State<HomePageContent> {
             future: _lastP2hFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return _buildSubmissionItem('P2H Submission', 'Loading...', Icons.settings, Colors.green);
+                return _buildSubmissionItemWithLoading('P2H Submission', Icons.settings, Colors.green);
               } else if (snapshot.hasError) {
                 return _buildSubmissionItem('P2H Submission', 'Error', Icons.settings, Colors.green);
               } else if (snapshot.hasData) {
@@ -421,7 +439,7 @@ class _HomePageContentState extends State<HomePageContent> {
             future: _lastKkhFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return _buildSubmissionItem('KKH Submission', 'Loading...', Icons.work, Colors.blue);
+                return _buildSubmissionItemWithLoading('KKH Submission', Icons.work, Colors.blue);
               } else if (snapshot.hasError) {
                 return _buildSubmissionItem('KKH Submission', 'Error', Icons.work, Colors.blue);
               } else if (snapshot.hasData) {
@@ -437,7 +455,6 @@ class _HomePageContentState extends State<HomePageContent> {
     );
   }
 
-
   Widget _buildSubmissionItem(String title, String subtitle, IconData icon, Color iconColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
@@ -452,5 +469,31 @@ class _HomePageContentState extends State<HomePageContent> {
       ),
     );
   }
+
+  Widget _buildSubmissionItemWithLoading(String title, IconData icon, Color iconColor) {
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6.0),
+        child: Card(
+          elevation: 4,
+          shadowColor: Colors.grey.withOpacity(0.7),
+          child: ListTile(
+            leading: Icon(icon, size: 35, color: iconColor),
+            title: Text(title),
+            subtitle: const Row(
+              children: [
+                SizedBox(
+                  width: 100,
+                  child: LinearProgressIndicator(
+                    color: Color(0xFF304FFE),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        )
+    );
+  }
+
+
 
 }
