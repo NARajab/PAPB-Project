@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import './timesheet.dart';
-import '../../../services/p2h_services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:another_flushbar/flushbar.dart';
+import '../../../services/p2h_services/timesheet/location_service.dart';
+import 'timesheet.dart';
 
 class LocationScreen extends StatefulWidget {
   const LocationScreen({super.key});
@@ -19,6 +19,8 @@ class _LocationScreenState extends State<LocationScreen> {
   final TextEditingController fuelController = TextEditingController();
   final TextEditingController fuelhmController = TextEditingController();
 
+  FirebaseLocationService locationService = FirebaseLocationService();
+
   @override
   void initState() {
     super.initState();
@@ -26,59 +28,35 @@ class _LocationScreenState extends State<LocationScreen> {
   }
 
   Future<String?> _getUserId() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null) {
-      return null;
-    }
-
     try {
-      final decodedToken = JwtDecoder.decode(token);
-      final userId = decodedToken['id'];
+      final user = FirebaseAuth.instance.currentUser;
 
-      return userId is int ? userId.toString() : userId as String?;
+      if (user == null) {
+        return null;
+      }
+
+      return user.uid;
     } catch (e) {
-      print("Error decoding token: $e");
+      print("Error getting user ID: $e");
       return null;
     }
-  }
-
-  Future<int?> _getLocationId(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('locationId_$userId');
-  }
-
-  Future<bool> _isLocationCreatedWithin13Hours(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final int? timestamp = prefs.getInt('locationCreatedTimestamp_$userId');
-    if (timestamp == null) {
-      return false;
-    }
-
-    final DateTime savedTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-    final DateTime currentTime = DateTime.now();
-    final Duration difference = currentTime.difference(savedTime);
-
-    // Check if 13 hours have passed
-    if (difference.inHours >= 13) {
-      return false;
-    }
-
-    return true;
   }
 
   Future<void> _checkLocationFilled() async {
     final userId = await _getUserId();
-
     if (userId == null) {
       Navigator.pushReplacementNamed(context, '/login');
       return;
     }
 
-    final bool isLocationCreatedWithin13Hours = await _isLocationCreatedWithin13Hours(userId);
+    final prefs = await SharedPreferences.getInstance();
+    final locationCreatedTimestamp = prefs.getInt('locationCreatedTimestamp_$userId');
+    final currentTime = DateTime.now().millisecondsSinceEpoch;
 
-    if (isLocationCreatedWithin13Hours) {
-      final int? locationId = await _getLocationId(userId);
+    // Check if the location was created within the last 13 hours
+    if (locationCreatedTimestamp != null && (currentTime - locationCreatedTimestamp < 13 * 60 * 60 * 1000)) {
+      // Location was created in the last 13 hours, navigate to the TimesheetScreen
+      final locationId = prefs.getString('locationId_$userId');
       if (locationId != null) {
         Navigator.pushReplacement(
           context,
@@ -86,37 +64,16 @@ class _LocationScreenState extends State<LocationScreen> {
             builder: (context) => TimesheetScreen(locationId: locationId),
           ),
         );
-      } else {
-        print("Location ID is null");
       }
     } else {
-      // Show message that the user must wait 13 hours before creating a new location
+      // Location doesn't exist or the 13-hour period has passed
       _showErrorFlushbar('You must wait 13 hours before creating a new location.');
     }
   }
 
 
-  Widget _buildTextField(
-      TextEditingController controller,
-      String labelText, {
-        TextInputType keyboardType = TextInputType.text,
-        GestureTapCallback? onTap
-      }) {
-    return TextField(
-      controller: controller,
-      decoration: InputDecoration(
-        labelText: labelText,
-      ),
-      keyboardType: keyboardType,
-      onTap: onTap,
-      readOnly: false,
-    );
-  }
-
-  Future<void> _submitData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
-    final userId = await _getUserId(); // Ambil userId dari token
+  Future<void> submitData() async {
+    final userId = await _getUserId();
 
     if (userId == null) {
       Navigator.pushReplacementNamed(context, '/login');
@@ -132,25 +89,33 @@ class _LocationScreenState extends State<LocationScreen> {
     };
 
     try {
-      final response = await TimesheetServices().submitLocation(requestData, token);
-      final int locationId = response['lokasi']['id'];
+      final response = await locationService.addLocation(requestData);
+      print(response);
 
-      await prefs.setBool('isLocationFilled_$userId', true);
-      await prefs.setInt('locationCreatedTimestamp_$userId', DateTime.now().millisecondsSinceEpoch);
-      await prefs.setInt('locationId_$userId', locationId);
+      if (response != null) {
+        final locationId = response['id']; // Assuming 'id' is returned by Firestore and is a String
 
-      _showSuccessFlushbar();
-      _clearFields();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isLocationFilled_$userId', true);
+        await prefs.setInt('locationCreatedTimestamp_$userId', DateTime.now().millisecondsSinceEpoch);
+        await prefs.setString('locationId_$userId', locationId); // Use setString instead of setInt
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => TimesheetScreen(locationId: locationId),
-        ),
-      );
+        _showSuccessFlushbar();
+        _clearFields();
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TimesheetScreen(locationId: locationId),
+          ),
+        );
+      } else {
+        _showErrorFlushbar('Failed to create location.');
+      }
     } catch (e) {
       _showErrorFlushbar(e.toString());
     }
+
   }
 
   void _clearFields() {
@@ -231,20 +196,46 @@ class _LocationScreenState extends State<LocationScreen> {
               _buildTextField(locationController, 'LOKASI'),
               const SizedBox(height: 25),
               const Text(
-                'PENGISIAN FUEL:',
-                style: TextStyle(
-                  fontSize: 16,
-                ),
+                'PENGISIAN FUEL: ',
+                style: TextStyle(fontSize: 16),
               ),
               _buildTextField(fuelhmController, 'HM'),
               _buildTextField(fuelController, 'FUEL'),
               const SizedBox(height: 25),
-              ElevatedButton(
-                onPressed: _submitData,
-                child: const Text('Kirim'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton(
+                      onPressed: submitData,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF304FFE),
+                        textStyle: const TextStyle(fontSize: 18),
+                        foregroundColor: Colors.white,
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.all(16),
+                      ),
+                      child: const Text('Submit'),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
         ),
       ),
     );

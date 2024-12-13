@@ -1,9 +1,7 @@
 import 'dart:io';
-import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dialogs/flutter_dialogs.dart';
-import '../services/settings_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -26,20 +24,32 @@ class _SettingScreenState extends State<SettingScreen> {
   }
 
   Future<void> _loadUserProfile() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    final currentUser = FirebaseAuth.instance.currentUser;
 
-    if (token != null) {
+    if (currentUser != null) {
       try {
-        ProfileServices profileServices = ProfileServices();
-        Map<String, dynamic> userData = await profileServices.getUserById(token);
+        final userSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
 
-        setState(() {
-          username = userData['user']['Auth']['username'] ?? 'No Name';
-          email = userData['user']['Auth']['email'] ?? 'No Email';
-          profileImageUrl = userData['user']['imageUrl'] ?? 'No Image';
-          isLoading = false;
-        });
+        if (userSnapshot.exists) {
+          final userData = userSnapshot.data();
+
+          setState(() {
+            username = userData?['username'] ?? 'No Name';
+            email = userData?['email'] ?? 'No Email';
+            profileImageUrl = userData?['imageUrl'] ?? 'No Image';
+            isLoading = false;
+          });
+        } else {
+          setState(() {
+            username = 'User not found';
+            email = 'Email not available';
+            profileImageUrl = 'No Image';
+            isLoading = false;
+          });
+        }
       } catch (e) {
         print('Error loading profile: $e');
         setState(() {
@@ -57,16 +67,21 @@ class _SettingScreenState extends State<SettingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      body: isLoading // Check if loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF304FFE)))
+      body: isLoading
+          ? const Center(
+        child: CircularProgressIndicator(color: Color(0xFF304FFE)),
+      )
           : ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           _buildProfileHeader(),
           const SizedBox(height: 20),
-          _buildOptionCard(context, 'Profile', 'assets/images/profile.png', () => _onProfileTap(context)),
-          _buildOptionCard(context, 'Change Password', 'assets/images/cp.png', () => _onChangePasswordTap(context)),
-          _buildOptionCard(context, 'Logout', 'assets/images/logout.png', () => _onLogoutTap(context)),
+          _buildOptionCard(context, 'Profile', 'assets/images/profile.png',
+                  () => _onProfileTap(context)),
+          _buildOptionCard(context, 'Change Password',
+              'assets/images/cp.png', () => _onChangePasswordTap(context)),
+          _buildOptionCard(context, 'Logout', 'assets/images/logout.png',
+                  () => _onLogoutTap(context)),
         ],
       ),
     );
@@ -108,7 +123,8 @@ class _SettingScreenState extends State<SettingScreen> {
     );
   }
 
-  Widget _buildOptionCard(BuildContext context, String title, String imagePath, VoidCallback onTap) {
+  Widget _buildOptionCard(
+      BuildContext context, String title, String imagePath, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -146,58 +162,25 @@ class _SettingScreenState extends State<SettingScreen> {
   }
 
   void _onLogoutTap(BuildContext context) {
-    Flushbar flushbar = Flushbar(
-      title: "Logout",
-      message: "Are you sure you want to logout?",
-      duration: null,
-      mainButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _logout(context);
-            },
-            child: const Text(
-              "Yes",
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-            child: const Text(
-              "No",
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-      isDismissible: true,
-      flushbarStyle: FlushbarStyle.FLOATING,
-      borderRadius: BorderRadius.circular(8),
-      backgroundColor: Colors.black54,
-      icon: const Icon(
-        Icons.logout,
-        size: 28.0,
-        color: Colors.red,
-      ),
-      leftBarIndicatorColor: Colors.red,
-    );
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return Stack(
-          children: [
-            Positioned(
-              left: 16,
-              right: 16,
-              top: MediaQuery.of(context).size.height * 0.4,
-              child: Center(
-                child: flushbar,
-              ),
+        return AlertDialog(
+          title: const Text('Logout'),
+          content: const Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _logout(context);
+              },
+              child: const Text('Yes', style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('No'),
             ),
           ],
         );
@@ -205,14 +188,16 @@ class _SettingScreenState extends State<SettingScreen> {
     );
   }
 
-  void _logout(BuildContext context) async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.remove('token');
-
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/login',
-          (Route<dynamic> route) => false,
-    );
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/login',
+            (Route<dynamic> route) => false,
+      );
+    } catch (e) {
+      print('Error logging out: $e');
+    }
   }
 }

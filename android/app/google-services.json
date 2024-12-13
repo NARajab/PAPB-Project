@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "836318718507",
+    "project_id": "papb-project-de102",
+    "storage_bucket": "papb-project-de102.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:836318718507:android:9ebfa6236790c787d0186e",
+        "android_client_info": {
+          "package_name": "com.rajab.my_project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDElGqz-jXPVGngh9WqkmfjLu3HN8X9xRs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

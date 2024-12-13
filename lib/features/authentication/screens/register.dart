@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/auth_services.dart';
+import '../services/register_services.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'login_page.dart';
 
@@ -20,7 +20,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _passwordVisible = false;
   String _selectedRole = 'Driver';
 
-  final AuthService _authService = AuthService();
+  final RegisterServices _registerServices = RegisterServices();
 
   @override
   Widget build(BuildContext context) {
@@ -296,41 +296,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _register() async {
-    final String username = _usernameController.text;
-    final String email = _emailController.text;
-    final String nik = _nikController.text;
-    final String password = _passwordController.text;
-    final String phoneNumber = _phoneController.text;
+    final String username = _usernameController.text.trim();
+    final String email = _emailController.text.trim();
+    final String nik = _nikController.text.trim();
+    final String password = _passwordController.text.trim();
+    final String phoneNumber = _phoneController.text.trim();
     final String role = _selectedRole;
 
+    if (username.isEmpty ||
+        email.isEmpty ||
+        nik.isEmpty ||
+        password.isEmpty ||
+        phoneNumber.isEmpty) {
+      Flushbar(
+        message: 'All fields are required',
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.orange,
+        flushbarPosition: FlushbarPosition.TOP,
+      ).show(context);
+      return;
+    }
+
+    if (!RegExp(r"^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$")
+        .hasMatch(email)) {
+      Flushbar(
+        message: 'Please enter a valid email',
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.orange,
+        flushbarPosition: FlushbarPosition.TOP,
+      ).show(context);
+      return;
+    }
+
+    if (password.length < 6) {
+      Flushbar(
+        message: 'Password must be at least 6 characters',
+        duration: const Duration(seconds: 3),
+        backgroundColor: Colors.orange,
+        flushbarPosition: FlushbarPosition.TOP,
+      ).show(context);
+      return;
+    }
+
     try {
-      final response = await _authService.register(username, email, nik, password, phoneNumber, role);
+      final response =
+      await _registerServices.register(username, email, nik, password, phoneNumber, role);
 
       if (response['status'] == 'success') {
         Flushbar(
-            message: response['message'] ?? 'Register successful',
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.green,
-            flushbarPosition: FlushbarPosition.TOP
+          message: response['message'] ?? 'Register successful',
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.green,
+          flushbarPosition: FlushbarPosition.TOP,
+          onStatusChanged: (status) {
+            if (status == FlushbarStatus.DISMISSED) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+              );
+            }
+          },
         ).show(context);
-        await Future.delayed(const Duration(seconds: 3));
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
       } else {
         Flushbar(
-            message: response['message'] ?? 'Register failed',
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
-            flushbarPosition: FlushbarPosition.TOP
+          message: response['message'] ?? 'Register failed',
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.red,
+          flushbarPosition: FlushbarPosition.TOP,
         ).show(context);
-        throw Exception('Failed to register');
       }
     } catch (e) {
       print('Exception: $e');
       Flushbar(
-        message: 'Register failed',
+        message: 'An unexpected error occurred',
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.red,
         flushbarPosition: FlushbarPosition.TOP,

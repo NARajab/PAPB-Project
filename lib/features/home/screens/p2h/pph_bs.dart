@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:my_project/features/home/services/p2h_services/bus_services.dart';
 import '../../services/p2h_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:another_flushbar/flushbar.dart';
@@ -87,6 +90,7 @@ class P2hBsScreenState extends State<P2hBsScreen> {
   void initState() {
     super.initState();
     _fetchVehicleData();
+    _fetchUsername();
     for (var items in cardItems) {
       for (var item in items) {
         itemChecklist[item['field'] ?? ''] = false;
@@ -100,7 +104,7 @@ class P2hBsScreenState extends State<P2hBsScreen> {
     };
   }
 
-  int? selectedVehicleId;
+  String? selectedVehicleId;
   String? selectedShift;
 
   @override
@@ -118,17 +122,61 @@ class P2hBsScreenState extends State<P2hBsScreen> {
 
   Future<void> _fetchVehicleData() async {
     try {
-      FormServices formServices = FormServices();
-      final data = await formServices.getVehicleByType(widget.title);
+      final vehicleCollection = FirebaseFirestore.instance.collection('vehicles');
+
+      final querySnapshot = await vehicleCollection
+          .where('type', isEqualTo: widget.title)
+          .get();
+
+      final List<dynamic> fetchedVehicles = querySnapshot.docs.map((doc) {
+        final vehicleData = {
+          'id': doc.id,
+          ...doc.data(),
+        };
+
+        print('Fetched Vehicle ID: ${doc.id}');
+
+        return vehicleData;
+      }).toList();
+
       setState(() {
-        vehicles = data['vehicles'] ?? [];
+        vehicles = fetchedVehicles;
       });
     } catch (e) {
       print('Failed to fetch vehicles: $e');
     }
   }
 
+  Future<String> _fetchUsername() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userData = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        String username = userData.data()?['username'] ?? 'Unknown';
+        return username;
+      }
+    } catch (e) {
+      print('Failed to fetch username: $e');
+    }
+    return 'Unknown';
+  }
+
   void submitData() async {
+    if (selectedVehicleId == null || selectedVehicleId == -1) {
+      if (mounted) {
+        _showFlushbar('Error', 'Please select a vehicle before submitting.', Colors.red);
+      }
+      return;
+    }
+    if (selectedShift == null) {
+      if (mounted) {
+        _showFlushbar('Error', 'Please select a shift before submitting.', Colors.red);
+      }
+      return;
+    }
+
+    String username = await _fetchUsername();
+
     Map<String, int> checklistData = {};
     itemChecklist.forEach((key, value) {
       checklistData[key] = value ? 1 : 0;
@@ -149,46 +197,32 @@ class P2hBsScreenState extends State<P2hBsScreen> {
       ...checklistData,
       ...inputData,
       'idVehicle': selectedVehicleId,
-      'shift' : selectedShift
+      'shift': selectedShift,
+      'username': username
     };
 
+    BusService _busservice = BusService();
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
-
-    if (token != null) {
-      FormServices formServices = FormServices();
-      try {
-        await formServices.submitP2hBs(requestData, token);
-        Flushbar(
-          title: 'Success',
-          message: 'Data submitted successfully!',
-          duration: const Duration(seconds: 3),
-          backgroundColor: Colors.green,
-        ).show(context).then((_) {
-          _navigateBack(context);
-        });
-
-
-        textEditingController.clear();
-        kmAwalController.clear();
-        kmAkhirController.clear();
-        timeController.clear();
-
-      } catch (error) {
-        Flushbar(
-          title: 'Error',
-          message: 'Failed to submit data: $error',
-          duration: const Duration(seconds: 3),
-          backgroundColor: Colors.red,
-        ).show(context);
+    try {
+      await _busservice.submitP2hBus(requestData, context);
+      if (mounted) {
+        _showFlushbar('Success', 'Data submitted successfully!', Colors.green);
       }
-    } else {
+    } catch (e) {
+      print('Error $e');
+      if (mounted) {
+        _showFlushbar('Error', 'Failed to submit data: $e', Colors.red);
+      }
+    }
+  }
+
+  void _showFlushbar(String title, String message, Color backgroundColor) {
+    if (mounted) {
       Flushbar(
-        title: 'Error',
-        message: 'Token not found',
+        title: title,
+        message: message,
         duration: const Duration(seconds: 3),
-        backgroundColor: Colors.red,
+        backgroundColor: backgroundColor,
       ).show(context);
     }
   }
@@ -256,26 +290,32 @@ class P2hBsScreenState extends State<P2hBsScreen> {
   }
 
   Widget _buildVehicleDropdown() {
-    return DropdownButtonFormField<int>(
-      value: selectedVehicleId,
+    return DropdownButtonFormField<String>(
+      value: selectedVehicleId ?? '', // Gunakan String kosong sebagai default
       onChanged: vehicles.isNotEmpty
-          ? (int? newValue) {
+          ? (String? newValue) {
         setState(() {
           selectedVehicleId = newValue;
         });
       }
           : null,
-      items: vehicles.isNotEmpty
-          ? vehicles.map((vehicle) {
-        return DropdownMenuItem<int>(
-          value: vehicle['id'] as int,
-          child: Text(
-            '${vehicle['type']} - ${vehicle['modelu']} (${vehicle['nou']})',
-          ),
-        );
-      }).toList()
-          : [],
-      hint: const Text("Pilih Unit"),
+      items: [
+        const DropdownMenuItem<String>(
+          value: '',
+          child: Text("Pilih Unit"),
+        ),
+        ...vehicles.map((vehicle) {
+          return DropdownMenuItem<String>(
+            value: vehicle['id'], // Gunakan ID sebagai String
+            child: Text(
+              '${vehicle['modelu']} ${vehicle['nou']}', // Tampilkan ID
+            ),
+          );
+        }).toList(),
+      ],
+      hint: selectedVehicleId == ''
+          ? const Text("Pilih Unit")
+          : null,
     );
   }
 

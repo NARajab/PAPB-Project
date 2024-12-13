@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../history/services/p2h_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/p2h_services/foreman_services/note_screen_services.dart';
 import '../../services/p2h_foreman_services.dart';
+import '../../../history/services/p2h_services/history_service.dart';
 import 'package:another_flushbar/flushbar.dart';
 
 class NoteScreen extends StatefulWidget {
-  final int p2hId;
+  final String p2hId;
 
   NoteScreen({super.key, required this.p2hId});
 
@@ -19,7 +20,7 @@ class _NoteScreenState extends State<NoteScreen> {
   final TextEditingController _aroundUnitController = TextEditingController();
   final TextEditingController _inTheCabinController = TextEditingController();
   final TextEditingController _machineRoomController = TextEditingController();
-  final ForemanServices _foremanServices = ForemanServices();
+  final NoteScreenServices _noteScreenServices = NoteScreenServices();
 
   @override
   void initState() {
@@ -28,20 +29,9 @@ class _NoteScreenState extends State<NoteScreen> {
   }
 
   Future<void> _fetchP2hData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token != null) {
-      setState(() {
-        _p2hData = _p2hHistoryServices.getP2hById(widget.p2hId, token);
-      });
-    } else {
-      Flushbar(
-        title: 'Error',
-        message: 'Failed to validate',
-        duration: const Duration(seconds: 3),
-        backgroundColor: Colors.red,
-      ).show(context);
-    }
+    setState(() {
+      _p2hData = getP2hById(widget.p2hId);
+    });
   }
 
   @override
@@ -56,19 +46,22 @@ class _NoteScreenState extends State<NoteScreen> {
     String aroundU = _aroundUnitController.text;
     String inTheCabin = _inTheCabinController.text;
     String machineRoom = _machineRoomController.text;
+    String p2hId = widget.p2hId;
 
     try {
-      await _foremanServices.submitNotes(
+      // Panggil metode submitNotes dari ForemanServices
+      await _noteScreenServices.submitNotes(
         aroundU,
         inTheCabin,
         machineRoom,
-        widget.p2hId,
+        p2hId,
       );
       showFlushbar('Success', 'Notes submitted successfully.', isSuccess: true);
     } catch (e) {
       showFlushbar('Error', 'Failed to submit notes: $e');
     }
   }
+
 
   void showFlushbar(String title, String message, {bool isSuccess = false}) {
     Flushbar(
@@ -129,11 +122,9 @@ class _NoteScreenState extends State<NoteScreen> {
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('No data found'));
           } else {
-            final data = snapshot.data!['Pph'] as Map<String, dynamic>;
-
-            _aroundUnitController.text = data['ntsAroundUf'] ?? '';
-            _inTheCabinController.text = data['ntsInTheCabinUf'] ?? '';
-            _machineRoomController.text = data['ntsMachineRoomf'] ?? '';
+            final data = snapshot.data!;
+            // Print the fetched data to the console
+            print('Fetched data: $data');
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),

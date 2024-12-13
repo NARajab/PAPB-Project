@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/setting/screens/change_password.dart';
 import 'features/setting/screens/profile.dart';
 import 'features/history/screens/history.dart';
 import 'features/home/screens/kkh.dart';
-// import 'package:myapp/features/home/screens/p2h/timesheet/postscript.dart';
-import 'features/home/screens/p2h/timesheet/timesheet.dart';
 import 'features/home/screens/p2h/timesheet/location.dart';
 import 'features/home/screens/p2h/pph.dart';
 import 'features/home/screens/p2h/pph_bl.dart';
@@ -20,6 +20,10 @@ import 'features/Setting/screens/setting.dart';
 import 'dart:async';
 
 Future main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
@@ -94,8 +98,6 @@ class _MyAppState extends State<MyApp> {
           );
         },
         '/location': (context) => const LocationScreen(),
-        // '/timesheet': (context) => TimesheetScreen(locationId: locationId),
-        // '/postscript': (context) => PostscriptScreen(),
       },
     );
   }

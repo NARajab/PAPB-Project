@@ -1,9 +1,10 @@
+import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
 import './postscript.dart';
-import '../../../services/p2h_services.dart';
+import '../../../services/p2h_services/timesheet/timesheet_service.dart';
 
 class TimesheetScreen extends StatefulWidget {
-  final int locationId;
+  final String locationId;
 
   const TimesheetScreen({super.key, required this.locationId});
 
@@ -87,19 +88,8 @@ class _TimesheetScreenState extends State<TimesheetScreen> {
     {'code': 'ICM', 'description': 'Accident'}
   ];
 
-  // Function to add input data to the list
   void addData() async {
-    setState(() {
-      inputData.add({
-        'Time': selectedTime ?? '',
-        'Material': selectedKodeMaterial ?? '',
-        'Remark': remarkController.text,
-        'Kode Aktivitas': selectedKodeAktivitas ?? '',
-        'Kode Delay': selectedKodeDelay ?? '',
-        'Kode Idle': selectedKodeIdle ?? '',
-        'Kode Repair': selectedKodeRepair ?? '',
-      });
-
+    setState(() async {
       final requestData = {
         'timeTs': selectedTime,
         'material': selectedKodeMaterial,
@@ -108,16 +98,39 @@ class _TimesheetScreenState extends State<TimesheetScreen> {
         'delayCode': selectedKodeDelay,
         'idleCode': selectedKodeIdle,
         'repairCode': selectedKodeRepair,
+        'idLocation': widget.locationId
       };
 
+      TimesheetService _tsservice = TimesheetService();
+      final List<Map<String, dynamic>> response;
       try {
-        final response = TimesheetServices().submitTimesheet(widget.locationId, requestData);
-        print('Submit response: $response');
+        await _tsservice.addTimesheet(requestData);
+
+        response = await _tsservice.getTimesheetsByIdLocation(widget.locationId);
+        print(response);
+        setState(() {
+          inputData = response.map((data) {
+            return {
+              'Time': data['timeTs']?.toString() ?? '-',
+              'Material': data['material']?.toString() ?? '-',
+              'Remark': data['remark']?.toString() ?? '-',
+              'Kode Aktivitas': data['activityCode']?.toString() ?? '-',
+              'Kode Delay': data['delayCode']?.toString() ?? '-',
+              'Kode Idle': data['idleCode']?.toString() ?? '-',
+              'Kode Repair': data['repairCode']?.toString() ?? '-',
+            };
+          }).toList();
+        });
+        if (mounted) {
+          _showFlushbar('Success', 'Data submitted successfully!', Colors.green);
+        }
       } catch (e) {
         print('Error submitting timesheet: $e');
+        if (mounted) {
+          _showFlushbar('Error', 'Failed to submit data: $e', Colors.red);
+        }
       }
 
-      // Clear the input fields
       selectedTime = null;
       timeController.clear();
       remarkController.clear();
@@ -129,9 +142,17 @@ class _TimesheetScreenState extends State<TimesheetScreen> {
     });
   }
 
+  void _showFlushbar(String title, String message, Color backgroundColor) {
+    if (mounted) {
+      Flushbar(
+        title: title,
+        message: message,
+        duration: const Duration(seconds: 3),
+        backgroundColor: backgroundColor,
+      ).show(context);
+    }
+  }
 
-
-  // Function to navigate back to home
   void navigateBack(BuildContext context) {
     Navigator.pushReplacementNamed(context, '/p2h');
   }

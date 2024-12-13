@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
-import '../services/settings_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/profile_services.dart';
 import 'dart:io';
 import 'package:another_flushbar/flushbar.dart';
 
@@ -63,44 +63,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
 
   Future<void> saveChanges() async {
+    String? imageUrl;
     setState(() {
       isLoading = true;
     });
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    ProfileServices profileServices = ProfileServices();
+    try {
+      String? uploadedImageUrl;
 
-    if (token != null) {
-      ProfileServices profileServices = ProfileServices();
-      try {
-        await profileServices.updateProfile(
-          token,
-          usernameController.text,
-          emailController.text,
-          phoneNumberController.text,
-          newProfileImage,
-        );
-
-        _showFlushbar('Success', 'Profile updated successfully.', isSuccess: true);
-
-        await Future.delayed(const Duration(milliseconds: 2000));
-        Map<String, dynamic> editedData = {
-          'username': usernameController.text,
-          'email': emailController.text,
-          'phoneNumber': phoneNumberController.text,
-          'profileImageUrl': widget.currentProfileImageUrl,
-          'profileImageFile': newProfileImage,
-        };
-        Navigator.pop(context, editedData);
-      } catch (e) {
-        _showFlushbar('Error', 'Failed to update profile: $e');
-      } finally {
-        setState(() {
-          isLoading = false;
-        });
+      if (newProfileImage != null) {
+        uploadedImageUrl = await profileServices.uploadProfileImage(newProfileImage!);
+        print(uploadedImageUrl);
+        if (uploadedImageUrl == null) {
+          throw Exception("Failed to upload profile image.");
+        }
       }
+
+      await profileServices.updateProfile(
+        usernameController.text,
+        phoneNumberController.text,
+        imageUrl: uploadedImageUrl,
+      );
+
+      _showFlushbar('Success', 'Profile updated successfully.', isSuccess: true);
+
+      // Kirim data baru ke layar sebelumnya
+      await Future.delayed(const Duration(milliseconds: 2000));
+      Map<String, dynamic> editedData = {
+        'username': usernameController.text,
+        'phoneNumber': phoneNumberController.text,
+        'profileImageUrl': uploadedImageUrl ?? newProfileImageUrl,
+        'profileImageFile': newProfileImage,
+      };
+      Navigator.pop(context, editedData);
+    } catch (e) {
+      _showFlushbar('Error', 'Failed to update profile: $e');
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
     }
   }
+
 
   void _showFlushbar(String title, String message, {bool isSuccess = false}) {
     Flushbar(
@@ -197,7 +202,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 20),
                 _buildTextField(controller: usernameController, label: 'Username'),
                 const SizedBox(height: 10),
-                _buildTextField(controller: emailController, label: 'Email'),
+                _buildTextField(controller: emailController, label: 'Email', enabled: false),
                 const SizedBox(height: 10),
                 _buildTextField(controller: phoneNumberController, label: 'Phone Number'),
                 const SizedBox(height: 20),
@@ -234,9 +239,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String label}) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    bool enabled = true, // Default: enabled
+  }) {
     return TextField(
       controller: controller,
+      enabled: enabled, // Disable/Enable field based on this value
+      style: TextStyle(
+        color: enabled ? Colors.black : Colors.grey, // Adjust text color
+      ),
       decoration: InputDecoration(
         labelText: label,
         border: OutlineInputBorder(

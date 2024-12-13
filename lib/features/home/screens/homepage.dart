@@ -1,4 +1,6 @@
 import 'package:flashy_tab_bar2/flashy_tab_bar2.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -103,7 +105,7 @@ class _HomePageContentState extends State<HomePageContent> {
   void initState() {
     super.initState();
     initializeDateFormatting('id_ID');
-    _loadToken().then((_) {
+    _loadUserRole().then((_) {
       setState(() {
         _p2hCountFuture = _fetchP2hData();
         _kkhCountFuture = _fetchKkhData();
@@ -114,57 +116,88 @@ class _HomePageContentState extends State<HomePageContent> {
   }
 
 
-  Future<void> _loadToken() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _token = prefs.getString('token');
-      if (_token != null) {
-        Map<String, dynamic> decodedToken = JwtDecoder.decode(_token!);
-        _role = decodedToken['role'];
+  Future<void> _loadUserRole() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      String uid = user.uid;
+
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (userDoc.exists) {
+        setState(() {
+          _role = userDoc['role'];
+        });
+      } else {
+        print("User data not found");
       }
-    });
+    } else {
+      print("User is not logged in");
+    }
   }
 
   Future<int> _fetchP2hData() async {
     try {
-      P2hServices p2hServices = P2hServices();
-      return await p2hServices.getAllP2hLength();
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('p2hs').get();
+
+      return snapshot.docs.length;
     } catch (e) {
+      print('Error fetching P2h data: $e');
       return 0;
     }
   }
 
   Future<int> _fetchKkhData() async {
     try {
-      KkhServices kkhServices = KkhServices();
-      return await kkhServices.getAllKkhLength();
+      QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('kkhs').get();
+
+      return snapshot.docs.length;
     } catch (e) {
+      print('Error fetching P2h data: $e');
       return 0;
     }
   }
 
   Future<Map<String, dynamic>> _fetchLastP2hData() async {
     try {
-      if (_token == null) {
-        throw Exception('Token is missing');
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('p2hs')
+          .orderBy('date', descending: false)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return {'date': 'N/A'};
       }
-      P2hServices p2hServices = P2hServices();
-      final data = await p2hServices.getLastP2hByUser(_token!);
-      return data['lastP2h']['P2h'];
+
+      var lastP2hData = snapshot.docs.first.data() as Map<String, dynamic>;
+
+      return {
+        'date': lastP2hData['date'] ?? 'N/A',
+      };
     } catch (e) {
       print('Error fetching last P2H data: $e');
       return {'date': 'N/A'};
     }
   }
 
+
   Future<Map<String, dynamic>> _fetchLastKkhData() async {
     try {
-      if (_token == null) {
-        throw Exception('Token is missing');
+      QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('kkhs')
+          .orderBy('date', descending: false)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        return {'date': 'N/A'};
       }
-      KkhServices kkhServices = KkhServices();
-      final data = await kkhServices.getLastKkhByUser(_token!);
-      return data['kkh'];
+
+      var lastP2hData = snapshot.docs.first.data() as Map<String, dynamic>;
+
+      return {
+        'date': lastP2hData['date'] ?? 'N/A',
+      };
     } catch (e) {
       print('Error fetching last P2H data: $e');
       return {'date': 'N/A'};
@@ -288,7 +321,7 @@ class _HomePageContentState extends State<HomePageContent> {
                       return _buildCounterP2h(
                         'Total Submission KKH Saat Ini',
                         '',
-                        isLoading: true, // Pass loading state
+                        isLoading: true,
                       );
                     } else if (snapshot.hasError) {
                       return _buildCounterP2h('Total Submission KKH Saat Ini', 'Error');

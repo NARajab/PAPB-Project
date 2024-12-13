@@ -1,8 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import '../services/kkh_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/kkh_services/kkh_service.dart';
 import 'package:another_flushbar/flushbar.dart';
 
 class KkhScreen extends StatefulWidget {
@@ -36,16 +36,64 @@ class _KkhScreenState extends State<KkhScreen> {
     });
   }
 
-  Future<void> submitData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+  String? getCurrentUserUid() {
+    final user = FirebaseAuth.instance.currentUser;
+    return user?.uid;
+  }
 
-    if (token == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Token not found. Please log in again.')),
+
+  Future<void> submitData(String? uid) async {
+    _showLoadingDialog();
+    String? imageUrl;
+
+    try {
+      if (uid == null) {
+        _showSnackBar('User is not logged in.');
+        return;
+      }
+
+      String totalJamTidur = '${jamController.text} Jam ${menitController.text} Menit';
+      if (_image != null) {
+        imageUrl = await _kkhServices.uploadKkhImage(_image!);
+        if (imageUrl == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to upload profile image')),
+          );
+          return;
+        }
+        print("Uploaded image URL: $imageUrl");
+      }
+
+      await _kkhServices.submitKkhData(
+        totalJamTidur,
+        uid,
+        imageUrl: imageUrl,
       );
-      return;
+
+      clearFields();
+      _closeDialog();
+
+      _showFlushbar('Success', 'Data submitted successfully!', Colors.green);
+    } catch (e) {
+      _closeDialog();
+      _showSnackBar('Error: $e');
     }
+  }
+
+
+
+  Future<void> onSubmit() async {
+    String? uid = getCurrentUserUid();  // Ambil UID dari Firebase
+    if (uid != null) {
+      await submitData(uid); // Kirim UID ke fungsi submitData
+    } else {
+      _showSnackBar('User is not logged in.');
+    }
+  }
+
+
+
+  void _showLoadingDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -55,37 +103,29 @@ class _KkhScreenState extends State<KkhScreen> {
         );
       },
     );
+  }
 
-    try {
-      String totalJamTidur = '${jamController.text} Jam ${menitController.text} Menit';
-
-      await _kkhServices.submitKkhData(
-        totalJamTidur,
-        _image,
-        token,
-      );
-
-      clearFields();
-
-      // Delay for a short time before closing the loading dialog
-      Future.delayed(const Duration(milliseconds: 300), () {
-        Navigator.of(context).pop();
-        // Show Flushbar after the loading dialog is closed
-        Flushbar(
-          title: 'Success',
-          message: 'Data submitted successfully!',
-          duration: const Duration(seconds: 3),
-          backgroundColor: Colors.green,
-        ).show(context);
-      });
-
-    } catch (e) {
-      Navigator.of(context).pop(); // Close the loading dialog in case of error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+  void _closeDialog() {
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
+
+  void _showFlushbar(String title, String message, Color backgroundColor) {
+    Flushbar(
+      title: title,
+      message: message,
+      duration: const Duration(seconds: 3),
+      backgroundColor: backgroundColor,
+    ).show(context);
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +210,7 @@ class _KkhScreenState extends State<KkhScreen> {
             ),
             const SizedBox(height: 10),
             ElevatedButton(
-              onPressed: submitData,
+              onPressed: onSubmit,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF304FFE),
                 textStyle: const TextStyle(

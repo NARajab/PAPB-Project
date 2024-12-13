@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
+import '../../home/services/kkh_services/validation_foreman_Services.dart';
 import '../../home/services/p2h_foreman_services.dart';
 import 'package:another_flushbar/flushbar.dart';
 
@@ -11,7 +12,7 @@ class HistoryKkhScreen extends StatefulWidget {
   final String role;
   final String imageUrl;
   final bool isValidated;
-  final int kkhId;
+  final String kkhId;
 
   const HistoryKkhScreen({
     super.key,
@@ -29,11 +30,12 @@ class HistoryKkhScreen extends StatefulWidget {
 }
 
 class HistoryKkhScreenState extends State<HistoryKkhScreen> {
-  final ForemanServices _foremanServices = ForemanServices();
+  final ValidationForemanServices _validationForemanServices = ValidationForemanServices();
 
   Future<void> _validateForeman() async {
     try {
-      await _foremanServices.foremanValidationKkh(widget.kkhId);
+      print(widget.kkhId);
+      await _validationForemanServices.foremanValidation(widget.kkhId);
       Flushbar(
         title: 'Success',
         message: 'Validation successful',
@@ -41,6 +43,7 @@ class HistoryKkhScreenState extends State<HistoryKkhScreen> {
         backgroundColor: Colors.green,
       ).show(context);
     } catch (e) {
+      print('Failed to validate: $e');
       Flushbar(
         title: 'Error',
         message: 'Failed to validate: $e',
@@ -108,7 +111,7 @@ class HistoryKkhScreenState extends State<HistoryKkhScreen> {
 
   Widget _buildHistoryCard(
       BuildContext context, {
-        required int kkhId,
+        required String kkhId,
         required String date,
         required String totalJamTidur,
         required String role,

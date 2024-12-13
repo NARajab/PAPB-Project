@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/settings_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:another_flushbar/flushbar.dart';
+import '../services/change_password_services.dart'; // Ganti import ke ChangePasswordServices
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -19,7 +19,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool _newPasswordVisible = false;
   bool _confirmPasswordVisible = false;
 
-  final ProfileServices _profileServices = ProfileServices();
+  final ChangePasswordServices _changePasswordServices = ChangePasswordServices(); // Update to use the new service
 
   @override
   void dispose() {
@@ -44,23 +44,14 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       return;
     }
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    try {
+      // Call Firebase service to change the password
+      await _changePasswordServices.changePassword(newPassword, confirmPassword);
 
-    if (token != null) {
-      try {
-        await _profileServices.changePassword(
-          oldPassword,
-          newPassword,
-          confirmPassword,
-          token,
-        );
-
-        // Show success notification and navigate back to the settings screen
-        _showFlushbar('Success', 'Password changed successfully.', isSuccess: true);
-      } catch (e) {
-        _showFlushbar('Error', 'Failed to change password: $e');
-      }
+      // Show success notification and navigate back to the settings screen
+      _showFlushbar('Success', 'Password changed successfully.', isSuccess: true);
+    } catch (e) {
+      _showFlushbar('Error', 'Failed to change password: $e');
     }
   }
 

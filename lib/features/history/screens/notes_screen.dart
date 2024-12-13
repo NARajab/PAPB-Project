@@ -1,10 +1,10 @@
 import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
-import '../services/p2h_services.dart';
+import '../services/p2h_services/history_service.dart';  // Make sure this import is correct for your service
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NoteScreen extends StatefulWidget {
-  final int p2hId;
+  final String p2hId;
 
   NoteScreen({super.key, required this.p2hId});
 
@@ -13,7 +13,6 @@ class NoteScreen extends StatefulWidget {
 }
 
 class _NoteScreenState extends State<NoteScreen> {
-  final P2hHistoryServices _p2hHistoryServices = P2hHistoryServices();
   late Future<Map<String, dynamic>> _p2hData;
 
   @override
@@ -23,20 +22,9 @@ class _NoteScreenState extends State<NoteScreen> {
   }
 
   Future<void> _fetchP2hData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token != null) {
-      setState(() {
-        _p2hData = _p2hHistoryServices.getP2hById(widget.p2hId, token);
-      });
-    } else {
-      Flushbar(
-        title: 'Error',
-        message: 'Failed to validate',
-        duration: const Duration(seconds: 3),
-        backgroundColor: Colors.red,
-      ).show(context);
-    }
+    setState(() {
+      _p2hData = getP2hById(widget.p2hId);
+    });
   }
 
   @override
@@ -82,7 +70,9 @@ class _NoteScreenState extends State<NoteScreen> {
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(child: Text('No data found'));
           } else {
-            final data = snapshot.data!['p2h'] as Map<String, dynamic>;
+            final data = snapshot.data!;
+            // Print the fetched data to the console
+            print('Fetched data: $data');
 
             return Padding(
               padding: const EdgeInsets.all(16.0),
@@ -100,7 +90,7 @@ class _NoteScreenState extends State<NoteScreen> {
                   Expanded(
                     child: ListView(
                       children: [
-                        _buildNoteCard('Keliling Unit', data['ntsAroundU']  ?? ''),
+                        _buildNoteCard('Keliling Unit', data['ntsAroundU'] ?? ''),
                         _buildNoteCard('Dalam Kabin', data['ntsInTheCabinU'] ?? ''),
                         _buildNoteCard('Ruang Mesin', data['ntsMachineRoom'] ?? ''),
                       ],
@@ -118,7 +108,6 @@ class _NoteScreenState extends State<NoteScreen> {
                   Expanded(
                     child: ListView(
                       children: [
-                        // Add your comment data here (if applicable)
                         _buildNoteCard('Keliling Unit', data['ntsAroundUf'] ?? ''),
                         _buildNoteCard('Dalam Kabin', data['ntsInTheCabinUf'] ?? ''),
                         _buildNoteCard('Ruang Mesin', data['ntsMachineRoomf'] ?? ''),

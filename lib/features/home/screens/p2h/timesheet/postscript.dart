@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../services/p2h_services.dart';
+import '../../../services/p2h_services/timesheet/timesheet_service.dart';
 import 'package:another_flushbar/flushbar.dart';
 
 class PostscriptScreen extends StatelessWidget {
-  final int locationId;
+  final String locationId;
   final TextEditingController postscriptController = TextEditingController();
   final TextEditingController stopOperasiJamController = TextEditingController();
 
@@ -13,14 +13,14 @@ class PostscriptScreen extends StatelessWidget {
   void _submitData(BuildContext context) async {
     final requestData = {
       'postscript': postscriptController.text,
-      'stopOperation': stopOperasiJamController.text
+      'stopOperation': stopOperasiJamController.text,
     };
 
+    try {
+      // Submit data using the service function
+      await TimesheetService().submitPostscript(locationId, requestData);
 
-
-    try{
-      await TimesheetServices().submitPostscript(locationId, requestData);
-
+      // Show success notification
       Flushbar(
         title: 'Success',
         message: 'Data submitted successfully!',
@@ -29,7 +29,8 @@ class PostscriptScreen extends StatelessWidget {
       ).show(context).then((_) {
         _navigateBack(context);
       });
-    }catch (e){
+    } catch (e) {
+      // Show error notification
       Flushbar(
         title: 'Error',
         message: 'Failed to submit data: $e',
@@ -38,6 +39,7 @@ class PostscriptScreen extends StatelessWidget {
       ).show(context);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

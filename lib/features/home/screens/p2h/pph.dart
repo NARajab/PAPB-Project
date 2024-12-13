@@ -65,9 +65,9 @@ class P2hScreen extends StatelessWidget {
   }
 
 
-  Future<int?> _getLocationId() async {
+  Future<String?> _getLocationId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt('locationId');
+    return prefs.getString('locationId');
   }
 
   void _navigateToTimesheetOrLocation(BuildContext context) async {
@@ -75,7 +75,7 @@ class P2hScreen extends StatelessWidget {
 
     if (isLocationFilled == true) {
       print('isLocationFilled is true');
-      int? locationId = await _getLocationId();
+      String? locationId = await _getLocationId();
 
       if (locationId != null) {
         Navigator.pushReplacement(

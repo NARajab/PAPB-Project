@@ -1,9 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../history/screens/history_kkh.dart';
-import '../../services/p2h_foreman_services.dart';
+import '../../services/kkh_services/kkh_foreman_services.dart';
 
 class ForemanKkh extends StatefulWidget {
   const ForemanKkh({super.key});
@@ -20,24 +21,25 @@ class _ForemanKkhState extends State<ForemanKkh> {
 
   List<Map<String, dynamic>> data = [];
 
-  late ForemanServices _data;
 
   @override
   void initState() {
     super.initState();
-    _data = ForemanServices();
     _loadData();
     _loadRole();
   }
 
+  final KkhForemanServices _kkhForemanServices = KkhForemanServices();
+
   Future<void> _loadData() async {
     try {
-      final response = await _data.getAllKkh();
+      final response = await _kkhForemanServices.getAllKkh();
       if (response['status'] == 'success' && response['kkh'] != null) {
         setState(() {
           data = List<Map<String, dynamic>>.from(response['kkh']);
           isLoading = false;
         });
+        print(data);
       } else {
         print('Failed to load Kkh data or no data available.');
         setState(() {
@@ -52,14 +54,42 @@ class _ForemanKkhState extends State<ForemanKkh> {
     }
   }
 
-  Future<void> _loadRole() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
 
-    if (token != null) {
-      Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
+  Future<void> _loadRole() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser != null) {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+
+        if (userDoc.exists) {
+          setState(() {
+            final userData = userDoc.data() as Map<String, dynamic>?;
+
+            role = userData?['role'] ?? '';
+          });
+
+
+          print('User Role: $role');
+        } else {
+          print('Dokumen pengguna tidak ditemukan');
+          setState(() {
+            role = '';
+          });
+        }
+      } else {
+        print('Tidak ada pengguna yang login');
+        setState(() {
+          role = '';
+        });
+      }
+    } catch (e) {
+      print('Error getting role: $e');
       setState(() {
-        role = decodedToken['role'] ?? ''; // Extract role from token
+        role = '';
       });
     }
   }
@@ -157,8 +187,13 @@ class _ForemanKkhState extends State<ForemanKkh> {
         padding: const EdgeInsets.all(16.0),
         children: data
             .where((item) {
-          final createdAt = item['createdAt']?.toLowerCase() ?? '';
-          final userName = item['User']['name']?.toLowerCase() ?? '';
+          final createdAt = item['createdAt'] != null
+              ? (item['createdAt'] as Timestamp).toDate().toString().toLowerCase()
+              : '';
+          // Check if 'User' exists before trying to access 'username'
+          final userName = (item['User'] != null && item['User']['username'] != null)
+              ? item['User']['username']?.toLowerCase() ?? ''
+              : '';
           final complaint = item['complaint']?.toLowerCase() ?? '';
           return createdAt.contains(filterText) ||
               userName.contains(filterText) || complaint.contains(filterText);
@@ -170,15 +205,18 @@ class _ForemanKkhState extends State<ForemanKkh> {
   }
 
   Widget _buildCard(BuildContext context, Map<String, dynamic> item) {
+    print(item);
     final createdAt = item['createdAt'];
     final date = item['date'];
-    final userName = item['User']['name'];
+    // Check if 'User' exists before accessing 'username'
+    final userName = (item['user'] != null && item['user']['username'] != null)
+        ? item['user']['username']
+        : 'Unknown User';
     final complaint = item['complaint'];
 
     if (createdAt == null || userName == null || complaint == null) {
       return const SizedBox();
     }
-
 
     Color complaintColor;
     switch (complaint) {
@@ -201,7 +239,7 @@ class _ForemanKkhState extends State<ForemanKkh> {
           context,
           MaterialPageRoute(
             builder: (context) => HistoryKkhScreen(
-              kkhId:item['id'] ?? '',
+              kkhId: item['kkhId'] ?? '',
               date: item['date'] ?? '',
               totalJamTidur: item['totaltime'] ?? '',
               role: role,
@@ -223,9 +261,7 @@ class _ForemanKkhState extends State<ForemanKkh> {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: (item['fValidation'] ?? false)
-                      ? Colors.green
-                      : Colors.red,
+                  color: (item['fValidation'] ?? false) ? Colors.green : Colors.red,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(

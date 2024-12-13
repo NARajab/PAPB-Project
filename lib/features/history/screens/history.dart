@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import './history_p2h.dart';
 import 'history_kkh.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/p2h_services.dart';
-import '../services/kkh_services.dart';
+import '../services/p2h_services/p2h_service.dart';
+import '../services/kkh_services/kkh_services.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -22,46 +23,71 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<Map<String, dynamic>> p2hHistoryData = [];
   List<Map<String, dynamic>> kkhHistoryData = [];
 
+  late P2hServices _p2hServices;
+  late KkhServices _kkhServices;
   late P2hHistoryServices _p2hHistoryServices;
-  late KkhHistoryServices _kkhHistoryServices;
 
   @override
   void initState() {
     super.initState();
+    _p2hServices = P2hServices();
+    _kkhServices = KkhServices();
     _p2hHistoryServices = P2hHistoryServices();
-    _kkhHistoryServices = KkhHistoryServices();
     _loadP2hHistoryData();
     _loadKkhHistoryData();
   }
 
   Future<void> _loadP2hHistoryData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    User? user = FirebaseAuth.instance.currentUser;
 
-    if (token != null) {
+    if (user != null) {
       try {
-        Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-        String role = decodedToken['role'];
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
 
-        final Map<String, dynamic> response;
-        if (role == 'Driver') {
-          response = await _p2hHistoryServices.getAllP2h(token);
-        } else if (role == 'Forman') {
-          response = await _p2hHistoryServices.getAllP2hUser();
+        if (userDoc.exists) {
+          String role = userDoc.get('role');
+
+          dynamic response;
+
+          if (role == 'Driver') {
+            response = await _p2hServices.fetchP2hUsersWithDetails(user.uid);
+          } else if (role == 'Forman') {
+            response = await _p2hServices.fetchAllP2hUsersWithDetails();
+          } else {
+            print('Unknown role: $role');
+            setState(() {
+              isLoading = false;
+            });
+            return;
+          }
+          print(response);
+
+          if (response is Map<String, dynamic>) {
+            if (response['status'] == 'success' && response['p2h'] != null) {
+              setState(() {
+                p2hHistoryData = List<Map<String, dynamic>>.from(response['p2h']);
+                isLoading = false;
+              });
+            } else {
+              print('Failed to load P2h data or no data available.');
+              setState(() {
+                isLoading = false;
+              });
+            }
+          }
+          else if (response is List<Map<String, dynamic>>) {
+            setState(() {
+              p2hHistoryData = response;
+              isLoading = false;
+            });
+          } else {
+            print('Unexpected response format.');
+            setState(() {
+              isLoading = false;
+            });
+          }
         } else {
-          print('Unknown role: $role');
-          setState(() {
-            isLoading = false;
-          });
-          return;
-        }
-        if (response['status'] == 'success' && response['p2h'] != null) {
-          setState(() {
-            p2hHistoryData = List<Map<String, dynamic>>.from(response['p2h']);
-            isLoading = false;
-          });
-        } else {
-          print('Failed to load P2h data or no data available.');
+          print('User document not found in Firestore.');
           setState(() {
             isLoading = false;
           });
@@ -73,7 +99,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         });
       }
     } else {
-      print('No token found, unable to load P2h history data.');
+      print('No user found, unable to load P2h history data.');
       setState(() {
         isLoading = false;
       });
@@ -82,19 +108,22 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
 
   Future<void> _loadKkhHistoryData() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
 
-    if (token != null) {
-      try {
-        Map<String, dynamic> decodedToken = JwtDecoder.decode(token);
-        String role = decodedToken['role'];
+      if (currentUser != null) {
+        String userId = currentUser.uid;
 
-        final Map<String, dynamic> response;
+        // Ambil peran pengguna terlebih dahulu
+        String role = await _getUserRole(userId);
+
+        dynamic response;
+
+        // Tentukan cara mengambil data berdasarkan peran
         if (role == 'Driver') {
-          response = await _kkhHistoryServices.getAllKkh(token);
+          response = await _kkhServices.getKkhByUserId(userId);
         } else if (role == 'Forman') {
-          response = await _kkhHistoryServices.getAllKkhUser();
+          response = await _kkhServices.getAllKkh();
         } else {
           print('Unknown role: $role');
           setState(() {
@@ -103,30 +132,47 @@ class _HistoryScreenState extends State<HistoryScreen> {
           return;
         }
 
+        // Proses respons yang diterima
         if (response['status'] == 'success' && response['kkh'] != null) {
           setState(() {
             kkhHistoryData = List<Map<String, dynamic>>.from(response['kkh']);
             isLoading = false;
           });
         } else {
-          print('Failed to load P2h data or no data available.');
+          print('Failed to load KKH data or no data available.');
           setState(() {
             isLoading = false;
           });
         }
-      } catch (e) {
-        print('Error occurred while loading Kkh history data: $e');
+      } else {
+        print('No current user found.');
         setState(() {
           isLoading = false;
         });
       }
-    } else {
-      print('No token found, unable to load Kkh history data.');
+    } catch (e) {
+      print('Error occurred while loading Kkh history data: $e');
       setState(() {
         isLoading = false;
       });
     }
   }
+
+  Future<String> _getUserRole(String userId) async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+
+      if (userDoc.exists) {
+        return userDoc.get('role') ?? '';  // Mengambil peran pengguna
+      } else {
+        return ''; // Jika tidak ada data pengguna
+      }
+    } catch (e) {
+      print('Error fetching user role: $e');
+      return ''; // Kembalikan string kosong jika ada error
+    }
+  }
+
 
 
   @override
@@ -187,28 +233,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Widget _buildP2HTab() {
-    List<Map<String, dynamic>> filteredData = p2hHistoryData.where((item) =>
-    item['P2h']['date'] != null &&
-        item['P2h']['Vehicle']['type'] != null &&
-        item['P2h']['date']!.toLowerCase().contains(filterText.toLowerCase()) ||
-        item['P2h']['Vehicle']['type']!.toLowerCase().contains(filterText.toLowerCase())
-    ).toList();
+    List<Map<String, dynamic>> filteredData = p2hHistoryData.where((item) {
+      return item['p2h']['date'] != null &&
+          item['vehicle']['type'] != null &&
+          (item['p2h']['date']!.toLowerCase().contains(filterText.toLowerCase()) ||
+              item['vehicle']['type']!.toLowerCase().contains(filterText.toLowerCase()));
+    }).toList();
 
-    // Sorting the filtered data
     filteredData.sort((a, b) {
-      DateTime? dateA = DateTime.tryParse(a['P2h']['createdAt']);
-      DateTime? dateB = DateTime.tryParse(b['P2h']['createdAt']);
+      DateTime? dateA = a['p2h']['createdAt']?.toDate();
+      DateTime? dateB = b['p2h']['createdAt']?.toDate();
 
-      // Compare dates first (newest first)
       int dateComparison = (dateB ?? DateTime.now()).compareTo(dateA ?? DateTime.now());
       if (dateComparison != 0) {
         return dateComparison;
       }
 
-      // If dates are the same, compare isValidated (false first)
-      bool isValidatedA = a['dValidation'] == true;
-      bool isValidatedB = b['dValidation'] == true;
-      return isValidatedA ? 1 : -1; // false (not validated) should come first
+      bool isValidatedA = a['p2hUser']['dValidation'] == true;
+      bool isValidatedB = b['p2hUser']['dValidation'] == true;
+      return isValidatedA ? 1 : -1;
     });
 
     return Column(
@@ -231,79 +274,77 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         Expanded(
           child: filteredData.isEmpty
-              ? const Center(child: Text('No results found'))
+              ? const Center(child: Text(' '))
               : ListView(
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-            children: filteredData.map((item) => GestureDetector(
-              onTap: () {
-                navigateToHistoryP2h(
+            children: filteredData.map((item) {
+              String p2hDate = item['p2h']['date'] ?? 'Unknown Date';
+              String vehicleType = item['vehicle']['type'] ?? 'Unknown Vehicle';
+              bool fValidation = item['p2hUser']['fValidation'] ?? false;
+              String p2hId = item['p2h']['id'] ?? 'Unknown ID';
+
+              return GestureDetector(
+                onTap: () {
+                  navigateToHistoryP2h(
                     context,
-                    item['id'],
-                    item['P2h']['id'],
-                    item['P2h']['Vehicle']['type'],
-                    item['P2h']['date'],
-                    'driver', // Assume role is 'driver' for now
-                    item['fValidation'].toString()
-                );
-              },
-              child: Card(
-                elevation: 3,
-                child: ListTile(
-                  title: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('${item['P2h']['date']}'),
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          color: item['fValidation'] == true ? Colors.green : Colors.red,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: item['fValidation'] == true
-                                  ? Colors.green.withOpacity(0.5)
-                                  : Colors.red.withOpacity(0.5),
-                              spreadRadius: 2,
-                              blurRadius: 3,
-                              offset: const Offset(0, 1),
-                            ),
-                          ],
+                    item['p2hUser']['id'] ?? 'Unknown User ID', // Handle null for p2hUser id
+                    p2hId,
+                    vehicleType,
+                    p2hDate,
+                    'driver',
+                    fValidation,
+                  );
+                },
+                child: Card(
+                  elevation: 3,
+                  child: ListTile(
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(p2hDate),
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            color: fValidation ? Colors.green : Colors.red,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: fValidation
+                                    ? Colors.green.withOpacity(0.5)
+                                    : Colors.red.withOpacity(0.5),
+                                spreadRadius: 2,
+                                blurRadius: 3,
+                                offset: const Offset(0, 1),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    subtitle: Text(vehicleType),
                   ),
-                  subtitle: Text('${item['P2h']['Vehicle']['type']}'),
                 ),
-              ),
-            )).toList(),
-          ),
+              );
+            }).toList(),
+          )
         ),
       ],
     );
   }
 
-
   Widget _buildKKHTab(List<Map<String, dynamic>> kkhData) {
     List<Map<String, dynamic>> filteredData = kkhData.where((item) {
-      String createdAt = item['createdAt'] ?? '';
+      String createdAt = item['createdAt']?.toDate()?.toString() ?? '';
       String complaint = item['complaint'] ?? '';
       return createdAt.toLowerCase().contains(filterText) ||
           complaint.toLowerCase().contains(filterText);
     }).toList();
 
     filteredData.sort((a, b) {
-      DateTime? dateA;
-      DateTime? dateB;
-
-      try {
-        dateA = DateTime.tryParse(a['createdAt']);
-        dateB = DateTime.tryParse(b['createdAt']);
-      } catch (e) {
-        print('Error parsing date: $e');
-      }
-
-      return (dateB ?? DateTime.now()).compareTo(dateA ?? DateTime.now());
+      DateTime dateA = a['createdAt']?.toDate() ?? DateTime.now();
+      DateTime dateB = b['createdAt']?.toDate() ?? DateTime.now();
+      return dateB.compareTo(dateA);
     });
 
     return Column(
@@ -326,13 +367,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         Expanded(
           child: filteredData.isEmpty
-              ? const Center(child: Text('No results found'))
+              ? const Center(child: Text(''))
               : ListView(
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
             children: filteredData.map((historyItem) {
-              String formattedDate = DateFormat('EEEE, dd MMMM yyyy', 'id').format(DateTime.parse(historyItem['createdAt']));
+              DateTime createdAt =
+                  historyItem['createdAt']?.toDate() ?? DateTime.now();
+              String formattedDate = DateFormat('EEEE, dd MMMM yyyy', 'id')
+                  .format(createdAt);
+
+              String complaint = historyItem['complaint'] ?? 'No complaint';
+              String imageUrl = historyItem['imageUrl'] ?? '';
+              String totalTime = historyItem['totalJamTidur'] ?? '0 Jam';
+              String date = historyItem['date'] ?? 'No date available';
+              String id = historyItem['id'] ?? 'Unknown ID';
+
+              bool fValidation = historyItem['fValidation'] == true;
+
               Color statusColor;
-              switch (historyItem['complaint']) {
+              switch (complaint) {
                 case 'Fit to work':
                   statusColor = Colors.green;
                   break;
@@ -343,35 +396,38 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   statusColor = Colors.red;
                   break;
                 default:
-                  statusColor = Colors.black; // Default color
+                  statusColor = Colors.black;
               }
+
               return GestureDetector(
                 onTap: () {
                   navigateToHistoryKkh(
                     context,
                     formattedDate,
-                    historyItem['id'] as int,
-                    historyItem['date'] as String,
-                    historyItem['complaint'] as String,
-                    historyItem['totaltime'] as String,
-                    historyItem['imageUrl'] as String,
-                    historyItem['fValidation'] == true,
+                    id,
+                    date,
+                    complaint,
+                    totalTime,
+                    imageUrl,
+                    fValidation,
                   );
                 },
                 child: Card(
                   elevation: 3,
                   child: ListTile(
                     leading: CircleAvatar(
-                      backgroundImage: NetworkImage(historyItem['imageUrl']),
+                      backgroundImage:
+                      imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+                      child: imageUrl.isEmpty
+                          ? const Icon(Icons.person)
+                          : null,
                     ),
                     title: Text(
-                      historyItem['date'],
-                      style: const TextStyle(
-                          fontSize: 14
-                      ),
+                      date,
+                      style: const TextStyle(fontSize: 14),
                     ),
                     subtitle: Text(
-                      historyItem['complaint'] ?? '',
+                      complaint,
                       style: TextStyle(color: statusColor),
                     ),
                     trailing: Column(
@@ -381,11 +437,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           width: 10,
                           height: 10,
                           decoration: BoxDecoration(
-                            color: historyItem['fValidation'] ? Colors.green : Colors.red,
+                            color: fValidation ? Colors.green : Colors.red,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: historyItem['fValidation']
+                                color: fValidation
                                     ? Colors.green.withOpacity(0.5)
                                     : Colors.red.withOpacity(0.5),
                                 spreadRadius: 2,
@@ -396,7 +452,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(historyItem['totaltime']),
+                        Text(totalTime),
                       ],
                     ),
                   ),
@@ -410,7 +466,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
 
-  void navigateToHistoryP2h(BuildContext context,int p2hUserId, int p2hId, String idVehicle, String date, String role, String isValidated) {
+  void navigateToHistoryP2h(BuildContext context,String p2hUserId, String p2hId, String idVehicle, String date, String role, bool isValidated) {
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -420,7 +476,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           idVehicle: idVehicle,
           date: date,
           role: role,
-          isValidated: isValidated == 'true',
+          isValidated: isValidated,
         ),
       ),
     );
@@ -429,7 +485,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void navigateToHistoryKkh(
       BuildContext context,
       String formattedDate,
-      int kkhId,
+      String kkhId,
       String date,
       String complaint,
       String totaltime,
@@ -450,5 +506,4 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
     );
   }
-
 }

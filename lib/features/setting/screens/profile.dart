@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../services/settings_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/profile_services.dart';
 import 'edit_profile.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -26,33 +25,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUserProfile() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString('token');
+    try {
+      ProfileServices profileServices = ProfileServices();
+      Map<String, dynamic> userData = await profileServices.getUserById();
+      print(userData);
 
-    if (token != null) {
-      try {
-        ProfileServices profileServices = ProfileServices();
-        Map<String, dynamic> userData = await profileServices.getUserById(token);
-
-        setState(() {
-          username = userData['user']['Auth']['username'] ?? 'No Name';
-          email = userData['user']['Auth']['email'] ?? 'No Email';
-          phoneNumber = userData['user']['phoneNumber'] ?? 'No Phone Number';
-          profileImageUrl = userData['user']['imageUrl'] ?? 'No Image';
-          _isLoading = false; // Set loading to false after data is loaded
-        });
-      } catch (e) {
-        print('Error loading profile: $e');
-        setState(() {
-          _isLoading = false; // Set loading to false in case of error
-        });
-      }
-    } else {
       setState(() {
-        _isLoading = false; // Set loading to false if token is null
+        username = userData['username'] ?? 'No Name';
+        email = userData['email'] ?? 'No Email';
+        phoneNumber = userData['phone'] ?? 'No Phone Number';
+        profileImageUrl = userData['imageUrl'] ?? '';
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading profile: $e');
+      setState(() {
+        _isLoading = false;
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

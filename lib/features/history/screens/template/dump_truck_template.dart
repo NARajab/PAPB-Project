@@ -1,14 +1,16 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import '../..//services/p2h_services.dart';
 import '../../../home/services/p2h_foreman_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/p2h_services/history_service.dart';
+import '../../../home/services/p2h_services/foreman_services/validation_foreman_services.dart';
 import 'package:syncfusion_flutter_datagrid/datagrid.dart';
 import 'package:another_flushbar/flushbar.dart';
 
 class DumpTruckTemplate extends StatefulWidget {
-  final int p2hUserId;
-  final int p2hId;
+  final String p2hUserId;
+  final String p2hId;
   final String role;
 
   const DumpTruckTemplate({
@@ -24,7 +26,7 @@ class DumpTruckTemplate extends StatefulWidget {
 
 class DumpTruckTemplateState extends State<DumpTruckTemplate> {
   final P2hHistoryServices _p2hHistoryServices = P2hHistoryServices();
-  final ForemanServices _foremanServices = ForemanServices();
+  final ValidationForemanServices _validationForemanServices = ValidationForemanServices();
   late Future<Map<String, dynamic>> _p2hData;
   late Future<String> operatorNameFuture;
   String? role;
@@ -36,32 +38,51 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
   }
 
   Future<Map<String, dynamic>> _fetchP2hData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    print(token);
-
-    if (token == null) {
-      print('token error');
-      throw Exception('Token not found');
-    }
 
     try {
-      return await _p2hHistoryServices.getP2hById(widget.p2hId, token);
+      final data = await fetchP2hUserDetailsById(widget.p2hUserId);
+      print(data);
+      if (data == null) {
+        throw Exception('No data found for P2hUserId: ${widget.p2hUserId}');
+      }
+      return data;
     } catch (e) {
-      throw Exception('$token: $e');
+      throw Exception('Error fetching data: $e');
     }
   }
 
   Future<String> _getOperatorData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
+    final user = FirebaseAuth.instance.currentUser;
 
-    if (token != null) {
-      final decodedToken = JwtDecoder.decode(token);
-      setState(() {
-        role = decodedToken['role'] ?? 'Forman';
-      });
-      return decodedToken['username'] ?? 'Unknown';
+    if (user != null) {
+      final uid = user.uid;
+
+      try {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+        if (userDoc.exists) {
+          final userData = userDoc.data();
+          final username = userData?['username'] ?? 'Unknown';
+          final userRole = userData?['role'] ?? 'Forman';
+
+          setState(() {
+            role = userRole;
+          });
+
+          return username;
+        } else {
+          setState(() {
+            role = 'Forman';
+          });
+          return 'Unknown';
+        }
+      } catch (e) {
+        print('Error fetching user data: $e');
+        setState(() {
+          role = 'Forman';
+        });
+        return 'Unknown';
+      }
     } else {
       setState(() {
         role = 'Forman';
@@ -72,14 +93,16 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
 
   Future<void> _validateForeman() async {
     try {
-      await _foremanServices.foremanValidation(widget.p2hId);
+      await _validationForemanServices.foremanValidation(widget.p2hUserId);
       Flushbar(
         title: 'Success',
         message: 'Validation successful',
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.green,
       ).show(context);
+      _fetchP2hData(); // Refresh the data after validation
     } catch (e) {
+      print('Failed to validate: $e');
       Flushbar(
         title: 'Error',
         message: 'Failed to validate: $e',
@@ -98,19 +121,17 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
           return const Center(child: CircularProgressIndicator());
         } else if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
-        } else if (!snapshot.hasData) {
+        } else if (!snapshot.hasData || snapshot.data == null) {
           return const Center(child: Text('No data available'));
         } else {
           final data = snapshot.data!;
-          final pph = data['p2h'] as Map<String, dynamic>;
-          final vehicle = pph['Vehicle'] as Map<String, dynamic>;
-
-          // Extract the conditions
-          final conditions = {
-            'AroundUnit': pph['AroundUnit'] as Map<String, dynamic>,
-            'MachineRoom': pph['MachineRoom'] as Map<String, dynamic>,
-            'InTheCabin': pph['InTheCabin'] as Map<String, dynamic>
-          };
+          final p2hUser = data?['p2hUser'] as Map<String, dynamic>?;
+          final pph = data['p2h'] as Map<String, dynamic>?;
+          final vehicle = data?['vehicle'] as Map<String, dynamic>?;
+          final user = data?['user'] as Map<String, dynamic>?;
+          final aroundUnit = data?['aroundUnit'] as Map<String, dynamic>?;
+          final inTheCabin = data?['inTheCabin'] as Map<String, dynamic>?;
+          final machineRoom = data?['machineRoom'] as Map<String, dynamic>?;
 
           return FutureBuilder<String>(
             future: operatorNameFuture,
@@ -143,16 +164,16 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
                                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 8),
-                                _buildDetailRow('Model Unit', pph['Vehicle']['modelu'] ?? 'Unknown'),
-                                _buildDetailRow('No Unit', pph['Vehicle']['nou'] ?? 'Unknown'),
-                                _buildDetailRow('Tanggal', pph['date'] ?? 'Unknown'),
-                                _buildDetailRow('Shift', pph['shift'] ?? 'Unknown'),
-                                _buildDetailRow('Nama Driver', operatorName),
-                                _buildDetailRow('Jam', pph['time'] ?? 'Unknown'),
-                                _buildDetailRow('HM Awal', pph['earlyhm'] ?? 'Unknown'),
-                                _buildDetailRow('HM Akhir', pph['endhm'] ?? 'Unknown'),
-                                _buildDetailRow('KM Awal', pph['earlykm'] ?? 'Unknown'),
-                                _buildDetailRow('KM Akhir', pph['endkm'] ?? 'Unknown'),
+                                _buildDetailRow('Model Unit', vehicle?['modelu'] ?? 'Unknown'),
+                                _buildDetailRow('No Unit', vehicle?['nou'] ?? 'Unknown'),
+                                _buildDetailRow('Tanggal', pph?['date'] ?? 'Unknown'),
+                                _buildDetailRow('Shift', pph?['shift'] ?? 'Unknown'),
+                                _buildDetailRow('Nama Operator', user?['username']),
+                                _buildDetailRow('Jam', pph?['time'] ?? 'Unknown'),
+                                _buildDetailRow('HM Awal', pph?['earlyhm'] ?? 'Unknown'),
+                                _buildDetailRow('HM Akhir', pph?['endhm'] ?? 'Unknown'),
+                                _buildDetailRow('KM Awal', pph?['earlykm'] ?? 'Unknown'),
+                                _buildDetailRow('KM Akhir', pph?['endkm'] ?? 'Unknown'),
                               ],
                             ),
                           ),
@@ -162,7 +183,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
                             child: SizedBox(
                               height: 1000,
                               child: SfDataGrid(
-                                source: _DataGridSource(_buildTableData(pph)),
+                                source: _DataGridSource(_buildTableData(aroundUnit!, inTheCabin!, machineRoom!)),
                                 columnWidthMode: ColumnWidthMode.fill,
                                 columns: [
                                   GridColumn(
@@ -229,7 +250,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
                               ),
                             ),
                           ),
-                          if (widget.role == 'Forman') ...[
+                          if (widget.role == 'Forman' && !p2hUser?['fValidation']) ...[
                             Padding(
                               padding: const EdgeInsets.all(12.0),
                               child: Column(
@@ -272,26 +293,29 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String title, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label,
+            '$title:',
             style: const TextStyle(fontWeight: FontWeight.bold),
           ),
-          Text(value),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  List<DataGridRow> _buildTableData(Map<String, dynamic> pph) {
-    final aroundUnit = pph['AroundUnit'] as Map<String, dynamic>;
-    final machineRoom = pph['MachineRoom'] as Map<String, dynamic>;
-    final inTheCabin = pph['InTheCabin'] as Map<String, dynamic>;
+  List<DataGridRow> _buildTableData(Map<String, dynamic> aroundUnit, Map<String, dynamic> inTheCabin, Map<String, dynamic> machineRoom) {
 
     return [
       const DataGridRow(cells: [
@@ -311,7 +335,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['bdbr'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['bdbr'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '2.'),
@@ -321,7 +345,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['kai'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['kai'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '3.'),
@@ -331,7 +355,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['kot'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['kot'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '4.'),
@@ -341,7 +365,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['sohd'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['sohd'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '5.'),
@@ -351,7 +375,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['fd'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['fd'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '6.'),
@@ -361,7 +385,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['bbcmin'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['bbcmin'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '7.'),
@@ -371,7 +395,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['badtu'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['badtu'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '8.'),
@@ -381,7 +405,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['kas'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['kas'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '9.'),
@@ -391,7 +415,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['tg'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['tg'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '10.'),
@@ -401,7 +425,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['ba'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['ba'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '11.'),
@@ -411,7 +435,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['g2'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['g2'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '12.'),
@@ -421,7 +445,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['sc'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['sc'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '13.'),
@@ -431,7 +455,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: aroundUnit['ka'] == true ? 'Baik' : 'Rusak'),
+            value: aroundUnit['ka'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       const DataGridRow(cells: [
         DataGridCell<String>(columnName: 'No', value: 'B.'),
@@ -451,7 +475,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['ac'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['ac'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '2.'),
@@ -461,7 +485,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fb'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fb'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '3.'),
@@ -471,7 +495,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fs'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fs'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '4.'),
@@ -481,7 +505,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fsb'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fsb'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '5.'),
@@ -491,7 +515,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fsl'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fsl'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '6.'),
@@ -501,7 +525,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['frl'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['frl'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '7.'),
@@ -511,7 +535,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fm'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fm'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '9.'),
@@ -521,7 +545,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fwdaw'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fwdaw'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '10.'),
@@ -531,7 +555,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fkp'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fkp'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '11.'),
@@ -541,7 +565,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['fh'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['fh'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '12.'),
@@ -551,7 +575,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['feapar'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['feapar'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '13.'),
@@ -561,7 +585,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['frk'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['frk'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '14.'),
@@ -571,7 +595,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'A'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: inTheCabin['krk'] == true ? 'Baik' : 'Rusak'),
+            value: inTheCabin['krk'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       const DataGridRow(cells: [
         DataGridCell<String>(columnName: 'No', value: 'C.'),
@@ -591,7 +615,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: machineRoom['ar'] == true ? 'Baik' : 'Rusak'),
+            value: machineRoom['ar'] == 1 ? 'Baik' : 'Rusak'),
       ]),
       DataGridRow(cells: [
         const DataGridCell<String>(columnName: 'No', value: '2.'),
@@ -601,7 +625,7 @@ class DumpTruckTemplateState extends State<DumpTruckTemplate> {
         const DataGridCell<String>(columnName: 'Kode', value: 'AA'),
         DataGridCell<String>(
             columnName: 'Kondisi',
-            value: machineRoom['oe'] == true ? 'Baik' : 'Rusak'),
+            value: machineRoom['oe'] == 1 ? 'Baik' : 'Rusak'),
       ]),
     ];
   }

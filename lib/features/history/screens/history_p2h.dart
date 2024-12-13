@@ -7,8 +7,8 @@ import './template/light_vehicle_template.dart';
 import './notes_screen.dart';
 
 class HistoryP2hScreen extends StatelessWidget {
-  final int p2hUserId;
-  final int p2hId;
+  final String p2hUserId;
+  final String p2hId;
   final String idVehicle;
   final String date;
   final String role;
@@ -24,12 +24,11 @@ class HistoryP2hScreen extends StatelessWidget {
     required this.isValidated
   });
 
-  Widget _buildTemplate(int p2hId, String idVehicle, String date, String entry) {
+  Widget _buildTemplate(String p2hId, String idVehicle, String date, String entry) {
     switch (idVehicle) {
       case 'Bulldozer':
         return BulldozerTemplate(p2hId: p2hId, p2hUserId: p2hUserId, role: role,);
       case 'Dump Truck':
-        // return DumpTruckTemplate(p2hId: p2hId, p2hUserId: p2hUserId, role: role);
         return DumpTruckTemplate(p2hUserId: p2hUserId, p2hId: p2hId, role: role);
       case 'Excavator':
         return ExcavatorTemplate(p2hId: p2hId, p2hUserId: p2hUserId, role: role);

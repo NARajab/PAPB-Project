@@ -7,8 +7,8 @@ import '../../../history/screens/template/light_vehicle_template.dart';
 import './notes_screen.dart';
 
 class Foremanvalidationp2hScreen extends StatelessWidget{
-  final int p2hId;
-  final int p2hUserId;
+  final String p2hId;
+  final String p2hUserId;
   final String idVehicle;
   final String date;
   final String role;
@@ -22,7 +22,7 @@ class Foremanvalidationp2hScreen extends StatelessWidget{
     required this.role
   });
 
-  Widget _buildTemplate(int p2hId, String role, String date, String entry){
+  Widget _buildTemplate(String p2hId, String role, String date, String entry){
     switch (idVehicle) {
       case 'Bulldozer':
         return BulldozerTemplate(p2hId: p2hId, p2hUserId: p2hUserId, role: role);
@@ -44,7 +44,7 @@ class Foremanvalidationp2hScreen extends StatelessWidget{
   Widget build(BuildContext context){
     return Scaffold(
       appBar: AppBar(
-        title: Text('Validation form P2H $role'),
+        title: const Text('Validation form P2H'),
         backgroundColor:  const Color(0xFF304FFE),
         elevation: 5,
         shadowColor: Colors.black,

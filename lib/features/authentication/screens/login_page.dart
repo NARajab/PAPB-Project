@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'register.dart';
 import 'send_email_forgot_password.dart';
-import '../services/auth_services.dart';
+import '../services/login_service.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../home/screens/homepage.dart';
@@ -18,7 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _passwordVisible = false;
-  final AuthService _authService = AuthService();
+  final LoginService _loginService = LoginService();
 
   @override
   void initState() {
@@ -39,69 +39,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _login() async {
     try {
-      final result = await _authService.login(
+      final result = await _loginService.login(
         _emailController.text,
         _passwordController.text,
       );
 
       if (result['status'] == 'success') {
-        final token = result['token'];
-        final role = result['role'];
-
-        if (role == 'SuperAdmin') {
-          Flushbar(
-            message: 'SuperAdmin access is not allowed.',
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
-            flushbarPosition: FlushbarPosition.TOP,
-          ).show(context);
-          return;
-        }
-
-        if (token != null) {
+        // Simpan email jika "Remember Me" dicentang
+        if (_rememberMe) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
-          await prefs.setString('token', token);
-
-          if (_rememberMe) {
-            await prefs.setString('rememberedEmail', _emailController.text);
-          } else {
-            await prefs.remove('rememberedEmail');
-          }
-
-          Flushbar(
-            message: result['message'] ?? 'Login successful',
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.green,
-            flushbarPosition: FlushbarPosition.TOP,
-          ).show(context);
-
-          await Future.delayed(const Duration(seconds: 2));
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const HomePage(),
-            ),
-          );
-        } else {
-          Flushbar(
-            message: 'Token is missing',
-            duration: const Duration(seconds: 3),
-            backgroundColor: Colors.red,
-            flushbarPosition: FlushbarPosition.TOP,
-          ).show(context);
+          prefs.setString('rememberedEmail', _emailController.text);
         }
+
+        Flushbar(
+          message: result['message'],
+          duration: const Duration(seconds: 3),
+          backgroundColor: Colors.green,
+          flushbarPosition: FlushbarPosition.TOP,
+        ).show(context);
+
+        // Delay sebelum pindah halaman
+        await Future.delayed(const Duration(seconds: 3));
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const HomePage(),
+          ),
+        );
       } else {
         Flushbar(
-          message: result['message'] ?? 'Login failed',
+          message: result['message'],
           duration: const Duration(seconds: 3),
           backgroundColor: Colors.red,
           flushbarPosition: FlushbarPosition.TOP,
         ).show(context);
       }
     } catch (e) {
-      print("Exception occurred: $e");
       Flushbar(
-        message: 'No Internet Connection',
+        message: 'An unexpected error occurred.',
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.red,
         flushbarPosition: FlushbarPosition.TOP,
