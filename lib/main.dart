@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:my_project/features/home/screens/foreman/foreman_kkh.dart';
+import 'features/home/screens/foreman/foreman_p2h.dart';
 import 'firebase_options.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/setting/screens/change_password.dart';
@@ -62,6 +64,8 @@ class _MyAppState extends State<MyApp> {
         '/change-password': (context) => const ChangePasswordScreen(),
         '/p2h': (context) => P2hScreen(),
         '/kkh': (context) => const KkhScreen(),
+        '/foremanp2h': (context) => const ForemanP2h(),
+        '/foremankkh': (context) => const ForemanKkh(),
         '/blForm': (context) {
           final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return P2hBlScreen(

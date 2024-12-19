@@ -160,7 +160,7 @@ class _ForemanP2hState extends State<ForemanP2h> {
                 filterText = '';
               });
             } else {
-              Navigator.pop(context);
+              Navigator.pushNamed(context, '/home');
             }
           },
         ),

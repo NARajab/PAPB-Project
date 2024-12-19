@@ -99,7 +99,9 @@ class LightVehicleTemplateState extends State<LightVehicleTemplate> {
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.green,
       ).show(context);
-      _fetchP2hData(); // Refresh the data after validation
+      await Future.delayed(const Duration(seconds: 3));
+
+      Navigator.pushNamed(context, '/foremanp2h');
     } catch (e) {
       print('Failed to validate: $e');
       Flushbar(

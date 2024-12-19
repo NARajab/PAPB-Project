@@ -144,7 +144,7 @@ class _ForemanKkhState extends State<ForemanKkh> {
                 filterText = '';
               });
             } else {
-              Navigator.pop(context);
+              Navigator.pushNamed(context, '/home');
             }
           },
         ),

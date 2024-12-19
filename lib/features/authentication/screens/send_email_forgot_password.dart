@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../services/send_email.dart';
 import 'package:another_flushbar/flushbar.dart';
@@ -10,8 +12,66 @@ class SendEmailForgotPasswordScreen extends StatefulWidget {
 }
 
 class _SendEmailForgotPasswordScreenState extends State<SendEmailForgotPasswordScreen> {
+  int _countdown = 0;
+  bool _isLoading = false;
+  bool _isButtonDisabled = false;
+
   final TextEditingController _emailController = TextEditingController();
   final SendEmailService _sendEmailService = SendEmailService();
+
+  void _sendEmail() async {
+    if (_emailController.text.isEmpty) {
+      Flushbar(
+        title: "Error",
+        message: "Email cannot be empty.",
+        duration: const Duration(seconds: 3),
+      ).show(context);
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _isButtonDisabled = true;
+      _countdown = 60; // Atur countdown menjadi 60 detik
+    });
+
+    try {
+      await _sendEmailService.sendPasswordResetEmail(_emailController.text, context);
+
+      Flushbar(
+        title: "Success",
+        message: "Email sent successfully. Please check your Email.",
+        duration: const Duration(seconds: 4),
+        backgroundColor: Colors.green,
+        titleColor: Colors.white,
+        messageColor: Colors.white,
+      ).show(context);
+    } catch (e) {
+      Flushbar(
+        title: "Error",
+        message: "Failed to send email: $e",
+        duration: const Duration(seconds: 3),
+      ).show(context);
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Memulai countdown
+      Timer.periodic(const Duration(seconds: 1), (Timer timer) {
+        if (_countdown == 0) {
+          timer.cancel();
+          setState(() {
+            _isButtonDisabled = false;
+          });
+        } else {
+          setState(() {
+            _countdown--;
+          });
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,15 +167,10 @@ class _SendEmailForgotPasswordScreenState extends State<SendEmailForgotPasswordS
                         const SizedBox(height: 20),
                         Center(
                           child: ElevatedButton(
-                            onPressed: () {
-                              _sendEmailService.sendPasswordResetEmail(
-                                _emailController.text,
-                                context,
-                              );
-                            },
+                            onPressed: _isButtonDisabled ? null : _sendEmail,
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(horizontal: 100, vertical: 15),
-                              backgroundColor: const Color(0xFF304FFE),
+                              backgroundColor: _isButtonDisabled ? Colors.grey : const Color(0xFF304FFE),
                               textStyle: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -123,8 +178,18 @@ class _SendEmailForgotPasswordScreenState extends State<SendEmailForgotPasswordS
                               foregroundColor: Colors.white,
                               elevation: 5,
                             ),
-                            child: const Text('Send Email'),
+                            child: _isLoading
+                                ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
+                            )
+                                : Text(_isButtonDisabled ? 'Retry in $_countdown s' : 'Send Email'),
                           ),
+
                         ),
                         const SizedBox(height: 20),
                       ],

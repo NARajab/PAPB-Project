@@ -16,7 +16,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String phoneNumber = 'Loading...';
   String profileImageUrl = 'Loading...';
   File? profileImageFile;
-  bool _isLoading = true; // Track loading state
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -64,7 +64,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           icon: const Icon(Icons.arrow_back_ios_new),
           color: Colors.white,
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.pushNamed(context, '/settings');
           },
         ),
         bottom: PreferredSize(

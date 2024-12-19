@@ -7,9 +7,6 @@ class SendEmailService {
   Future<void> sendPasswordResetEmail(String email, BuildContext context) async {
     try {
       await _auth.sendPasswordResetEmail(email: email);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reset password email sent! Check your inbox.')),
-      );
     } on FirebaseAuthException catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
       if (e.code == 'user-not-found') {

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:my_project/features/home/screens/p2h/pph.dart';
 import 'package:my_project/features/home/services/p2h_services/light_vehicle_service.dart';
 import 'package:another_flushbar/flushbar.dart';
 
@@ -15,6 +16,7 @@ class P2hLvScreen extends StatefulWidget {
 }
 
 class P2hLvScreenState extends State<P2hLvScreen> {
+  bool _isLoading = false;
   List<List<Map<String, String>>> cardItems = [
     [
       {'item': 'Ban & Baut roda', 'field': 'bdbr', 'kbj' : 'AA' },
@@ -163,6 +165,9 @@ class P2hLvScreenState extends State<P2hLvScreen> {
 
 
   void submitData() async {
+    setState(() {
+      _isLoading = true;
+    });
     if (selectedVehicleId == null || selectedVehicleId == -1) {
       if (mounted) {
         _showFlushbar('Error', 'Please select a vehicle before submitting.', Colors.red);
@@ -208,6 +213,15 @@ class P2hLvScreenState extends State<P2hLvScreen> {
       await _lvservice.submitP2hLv(requestData, context);
       if (mounted) {
         _showFlushbar('Success', 'Data submitted successfully!', Colors.green);
+
+        await Future.delayed(const Duration(seconds: 3));
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => P2hScreen(),
+          ),
+        );
       }
     } catch (e) {
       print('Error $e');
@@ -442,16 +456,22 @@ class P2hLvScreenState extends State<P2hLvScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ElevatedButton(
-                    onPressed: submitData,
+                    onPressed: _isLoading ? null : submitData,
                     style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 150, vertical: 15),
                       backgroundColor: const Color(0xFF304FFE),
                       textStyle: const TextStyle(
                         fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                       foregroundColor: Colors.white,
                       elevation: 5,
                     ),
-                    child: const Text('Submit'),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    )
+                        : const Text('Submit'),
                   ),
                 ],
               ),

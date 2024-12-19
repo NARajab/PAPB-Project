@@ -18,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _rememberMe = false;
   bool _passwordVisible = false;
+  bool _isLoading = false;
   final LoginService _loginService = LoginService();
 
   @override
@@ -38,6 +39,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final result = await _loginService.login(
         _emailController.text,
@@ -45,7 +50,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (result['status'] == 'success') {
-        // Simpan email jika "Remember Me" dicentang
         if (_rememberMe) {
           SharedPreferences prefs = await SharedPreferences.getInstance();
           prefs.setString('rememberedEmail', _emailController.text);
@@ -58,7 +62,6 @@ class _LoginScreenState extends State<LoginScreen> {
           flushbarPosition: FlushbarPosition.TOP,
         ).show(context);
 
-        // Delay sebelum pindah halaman
         await Future.delayed(const Duration(seconds: 3));
 
         Navigator.pushReplacement(
@@ -82,6 +85,10 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: Colors.red,
         flushbarPosition: FlushbarPosition.TOP,
       ).show(context);
+    } finally {
+      setState(() {
+        _isLoading = false; // Matikan indikator loading
+      });
     }
   }
 
@@ -122,8 +129,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 20.0),
-              const SizedBox(height: 50.0),
-              Center( // Center the image
+              Center(
                 child: Image.asset(
                   'assets/images/admin.png',
                   height: 250.0,
@@ -216,10 +222,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           GestureDetector(
                             onTap: () {
                               Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const SendEmailForgotPasswordScreen(),
-                                  )
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SendEmailForgotPasswordScreen(),
+                                ),
                               );
                             },
                             child: const Text(
@@ -234,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
                       Center(
                         child: ElevatedButton(
-                          onPressed: _login,
+                          onPressed: _isLoading ? null : _login,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 150, vertical: 15),
                             backgroundColor: const Color(0xFF304FFE),
@@ -245,7 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                             foregroundColor: Colors.white,
                             elevation: 5,
                           ),
-                          child: const Text('Login'),
+                          child: _isLoading
+                              ? const CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          )
+                              : const Text('Login'),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -293,3 +303,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+

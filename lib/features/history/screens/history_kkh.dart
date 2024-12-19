@@ -42,6 +42,9 @@ class HistoryKkhScreenState extends State<HistoryKkhScreen> {
         duration: const Duration(seconds: 3),
         backgroundColor: Colors.green,
       ).show(context);
+      await Future.delayed(const Duration(seconds: 3));
+
+      Navigator.pushNamed(context, '/foremankkh');
     } catch (e) {
       print('Failed to validate: $e');
       Flushbar(

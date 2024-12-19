@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:my_project/features/home/screens/p2h/pph.dart';
 import '../../services/p2h_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:another_flushbar/flushbar.dart';
@@ -18,6 +19,7 @@ class P2hBlScreen extends StatefulWidget {
 }
 
 class _P2hScreenState extends State<P2hBlScreen> {
+  bool _isLoading = false;
   List<List<Map<String, String>>> cardItems = [
     [
       {'item': 'Kondisi Underacarriage', 'field': 'ku', 'kbj' : 'A'},
@@ -157,6 +159,9 @@ class _P2hScreenState extends State<P2hBlScreen> {
   }
 
   void submitData() async {
+    setState(() {
+      _isLoading = true;
+    });
     if (selectedVehicleId == null || selectedVehicleId == -1) {
       if (mounted) {
         _showFlushbar('Error', 'Please select a vehicle before submitting.', Colors.red);
@@ -202,18 +207,15 @@ class _P2hScreenState extends State<P2hBlScreen> {
       await _bulservice.submitP2hBl(requestData, context);
       if (mounted) {
         _showFlushbar('Success', 'Data submitted successfully!', Colors.green);
-        hmAwalController.clear();
-        hmAkhirController.clear();
-        timeController.clear();
-        aroundUnitNotesController.clear();
-        inTheCabinNotesController.clear();
-        machineRoomNotesController.clear();
-        jobSiteController.clear();
-        lokasiController.clear();
 
-        itemChecklist.clear();
-        selectedVehicleId = null;
-        selectedShift = null;
+        await Future.delayed(const Duration(seconds: 3));
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => P2hScreen(),
+          ),
+        );
       }
     } catch (e) {
       print('Error $e');
@@ -452,16 +454,22 @@ class _P2hScreenState extends State<P2hBlScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   ElevatedButton(
-                    onPressed: submitData,
+                    onPressed: _isLoading ? null : submitData,
                     style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 150, vertical: 15),
                       backgroundColor: const Color(0xFF304FFE),
                       textStyle: const TextStyle(
                         fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                       foregroundColor: Colors.white,
                       elevation: 5,
                     ),
-                    child: const Text('Submit'),
+                    child: _isLoading
+                        ? const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    )
+                        : const Text('Submit'),
                   ),
                 ],
               ),

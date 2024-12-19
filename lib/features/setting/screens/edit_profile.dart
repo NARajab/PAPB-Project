@@ -96,7 +96,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'profileImageUrl': uploadedImageUrl ?? newProfileImageUrl,
         'profileImageFile': newProfileImage,
       };
-      Navigator.pop(context, editedData);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        '/profile',
+            (Route<dynamic> route) => false,
+      );
     } catch (e) {
       _showFlushbar('Error', 'Failed to update profile: $e');
     } finally {
